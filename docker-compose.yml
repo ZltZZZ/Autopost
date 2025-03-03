@@ -10,11 +10,16 @@ services:
     environment:
       # Важно: используйте ваш локальный IP-адрес, localhost может работать некорректно
       # Вместо 127.0.0.1 возьмите адрес в вашей локальной сети (напр. 192.168.11.156)
-      KEYCLOAK_URL: "YOUR_KEYCLOAK_URL"
-      REDIRECT_URL: "YOUR_REDIRECT_URL"
-      REALM: "REALM_NAME"
-      CLIENT_ID: "CLIENT_ID"
-      CLIENT_SECRET_KEY: "YOUR_SECRET_KEY"
+      #KEYCLOAK_URL: "YOUR_KEYCLOAK_URL"
+      #REDIRECT_URL: "YOUR_REDIRECT_URL"
+      #REALM: "REALM_NAME"
+      #CLIENT_ID: "CLIENT_ID"
+      #CLIENT_SECRET_KEY: "YOUR_SECRET_KEY"
+      KEYCLOAK_URL: "http://10.0.2.15:8090"   # URL Keycloak сервера
+      REDIRECT_URL: "http://10.0.2.15:8080/auth/callback"  # Адрес редиректа после авторизации
+      REALM: "new_realm"                   # Название Realm
+      CLIENT_ID: "backend-client"           # ID клиента
+      CLIENT_SECRET_KEY: "U7igVTMC8t4zBDd1BfhH5GtdQvwpFU7M"  # Секретный ключ клиента
 
 
   nginx_frontend:
