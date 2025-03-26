@@ -289,6 +289,15 @@
                 font-size: 14px;
                 color: #666;
             }
+
+            .btn-danger {
+                background-color: #dc3545;
+                color: white;
+            }
+            .btn-danger:hover {
+                background-color: #c82333;
+            }
+
             /* Мобильные стили только для исправления кнопки */
             @media (max-width: 768px) {
                 .temporary-link-controls {
@@ -332,6 +341,7 @@
                 <div class="profile-actions">
                     <button id="changePasswordBtn" class="btn btn-secondary">Новый пароль</button>
                     <button id="editPostBtn" class="btn btn-secondary">Редактировать new пост</button>
+                    <a class="btn btn-danger" href="/auth/logout" role="button">Выход</a>
 
                     <!-- Контейнер активных сессий -->
                     <div class="sessions-container">
@@ -355,6 +365,7 @@
                                 <option value="10080">1 неделя</option>
                             </select>
                             <button id="generateLinkBtn" class="btn btn-primary">Сгенерировать ссылку</button>
+                            <button id="revokeLinkBtn" class="btn btn-danger" style="display: none;">Отозвать ссылку</button>
                         </div>
                         <div id="linkExpirationInfo" class="link-expiration-info"></div>
                     </div>
@@ -407,6 +418,7 @@
 
                 <div class="modal-actions">
                     <button id="cancelPasswordBtn" class="btn btn-secondary">Отмена</button>
+
                     <button id="confirmPasswordBtn" class="btn btn-primary">Сохранить</button>
                 </div>
             </div>
@@ -436,6 +448,40 @@
                 const generateLinkBtn = document.getElementById("generateLinkBtn");
                 const durationSelect = document.getElementById("durationSelect");
                 const linkExpirationInfo = document.getElementById("linkExpirationInfo");
+                const revokeLinkBtn = document.getElementById("revokeLinkBtn");
+
+                // Показываем/скрываем кнопку отзыва
+                function updateRevokeButtonVisibility() {
+                    revokeLinkBtn.style.display = temporaryLinkInput.value ? "block" : "none";
+                }
+
+                // Обработчик клика на кнопку отзыва
+                revokeLinkBtn.addEventListener("click", function () {
+                    if (confirm("Вы уверены, что хотите отозвать временную ссылку?")) {
+                        fetch("/api/revoke_temporary_link", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/x-www-form-urlencoded",
+                                "X-CSRFToken": getCookie("csrftoken"),
+                            },
+                        })
+                            .then((response) => response.json())
+                            .then((data) => {
+                                if (data.success) {
+                                    temporaryLinkInput.value = "";
+                                    linkExpirationInfo.textContent = "";
+                                    revokeLinkBtn.style.display = "none";
+                                    alert("Ссылка успешно отозвана");
+                                } else {
+                                    alert("Ошибка при отзыве ссылки");
+                                }
+                            })
+                            .catch((error) => {
+                                console.error("Error revoking link:", error);
+                                alert("Произошла ошибка при отзыве ссылки");
+                            });
+                    }
+                });
 
                 // Копирование ссылки
                 copyLinkBtn.addEventListener("click", function () {
@@ -462,6 +508,7 @@
                                 temporaryLinkInput.value = data.link;
                                 const expiresAt = new Date(data.expires_at);
                                 linkExpirationInfo.textContent = `Ссылка действительна до: ${expiresAt.toLocaleString()}`;
+                                revokeLinkBtn.style.display = "block"; // Показываем кнопку отзыва
                             } else {
                                 alert("Ошибка при генерации ссылки");
                             }
@@ -506,6 +553,7 @@
                                 temporaryLinkInput.value = data.temporary_link.link;
                                 const expiresAt = new Date(data.temporary_link.expires_at);
                                 linkExpirationInfo.textContent = `Ссылка действительна до: ${expiresAt.toLocaleString()}`;
+                                revokeLinkBtn.style.display = "block"; // Показываем кнопку отзыва
                             }
                         })
                         .catch((error) => {
