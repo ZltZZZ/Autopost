@@ -1,37 +1,753 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Site with Auth</title>
-    <link rel="stylesheet" href="static/bootstrap-5.3.2-dist/css/bootstrap.css">
-</head>
-<body>
-<div class="container mt-5 mb-5">
-    <p>
-        Демо-приложение с внешней авторизацией через KeyCloak.
-    </p>
-    <p>
-        Вашей задачей является настроить сервер с Keycloak таким
-        образом, чтобы разграничить минимум 6 пользователей между тремя ресурсами.
-    </p>
-    <div class="row">
-        <div class="col">
-            <a class="btn btn-outline-success" href="/api/group_1" role="button">Ресурс 1</a>
-        </div>
-        <div class="col">
-            <a class="btn btn-outline-success" href="/api/group_2" role="button">Ресурс 2</a>
-        </div>
-        <div class="col">
-            <a class="btn btn-outline-success" href="/api/group_3" role="button">Ресурс 3</a>
-        </div>
-        <div class="col">
-            <a class="btn btn-outline-danger" href="/auth/logout" role="button">Выход</a>
-        </div>
-    </div>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Edit Post</title>
+        <link rel="stylesheet" href="static/bootstrap-5.3.2-dist/css/bootstrap.css" />
+        <style>
+            * {
+                box-sizing: border-box;
+                font-family: Arial, sans-serif;
+            }
 
-</div>
-</body>
-<script src="static/bootstrap-5.3.2-dist/js/jquery3.7.1.js"></script>
-<script src="static/bootstrap-5.3.2-dist/js/bootstrap.bundle.min.js"></script>
-<script src="static/app.js"></script>
+            body {
+                margin: 0;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+
+            .container {
+                max-width: 800px;
+                margin: 0 auto;
+                background-color: white;
+                border-radius: 10px;
+                padding: 20px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+
+            .post-input {
+                width: 100%;
+                min-height: 100px;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                resize: vertical;
+                margin-bottom: 15px;
+                font-size: 16px;
+            }
+
+            .buttons {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 15px;
+            }
+
+            .btn {
+                padding: 8px 15px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 14px;
+                transition: background-color 0.3s;
+            }
+
+            .btn-primary {
+                background-color: #4285f4;
+                color: white;
+            }
+
+            .btn-primary:hover {
+                background-color: #3367d6;
+            }
+
+            .btn-secondary {
+                background-color: #f1f1f1;
+                color: #333;
+            }
+
+            .btn-secondary:hover {
+                background-color: #e0e0e0;
+            }
+
+            .media-container {
+                display: flex;
+                gap: 10px;
+                overflow-x: auto;
+                padding: 10px 0;
+                margin-bottom: 15px;
+                scrollbar-width: thin;
+            }
+
+            .media-container::-webkit-scrollbar {
+                height: 8px;
+            }
+
+            .media-container::-webkit-scrollbar-thumb {
+                background-color: #ccc;
+                border-radius: 4px;
+            }
+
+            .media-thumbnail {
+                position: relative;
+                flex-shrink: 0;
+                width: 100px;
+                height: 100px;
+                border-radius: 5px;
+                overflow: hidden;
+                border: 1px solid #ddd;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background-color: #f0f0f0;
+            }
+
+            .media-thumbnail video {
+                max-width: 100%;
+                max-height: 100%;
+            }
+
+            .media-thumbnail .play-icon {
+                position: absolute;
+                width: 30px;
+                height: 30px;
+                background-color: rgba(255, 255, 255, 0.7);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .media-thumbnail img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+
+            .media-preview-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+            }
+
+            .media-preview-content {
+                position: relative;
+                max-width: 90%;
+                max-height: 90%;
+            }
+
+            .media-preview-content img,
+            .media-preview-content video {
+                max-width: 100%;
+                max-height: 80vh;
+                display: block;
+            }
+
+            .close-preview {
+                position: absolute;
+                top: -40px;
+                right: 0;
+                background: none;
+                border: none;
+                color: white;
+                font-size: 30px;
+                cursor: pointer;
+            }
+
+            .delete-photo {
+                position: absolute;
+                top: 2px;
+                right: 2px;
+                width: 20px;
+                height: 20px;
+                background-color: rgba(255, 0, 0, 0.7);
+                color: white;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                cursor: pointer;
+                border: none;
+                padding: 0;
+            }
+
+            .delete-photo:hover {
+                background-color: rgba(255, 0, 0, 0.9);
+            }
+
+            .hashtags-container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 15px;
+            }
+
+            .hashtag {
+                display: flex;
+                align-items: center;
+                background-color: #e0f2ff;
+                padding: 5px 10px;
+                border-radius: 15px;
+                font-size: 14px;
+            }
+
+            .hashtag-input {
+                border: none;
+                background: transparent;
+                outline: none;
+                font-size: 14px;
+                min-width: 50px;
+            }
+
+            .add-hashtag {
+                background-color: #e0f2ff;
+                border: none;
+                width: 30px;
+                height: 30px;
+                border-radius: 50%;
+                font-size: 16px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #4285f4;
+            }
+
+            .add-hashtag:hover {
+                background-color: #c2e0ff;
+            }
+
+            .hashtag-suggestions {
+                position: absolute;
+                background: white;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                max-height: 200px;
+                overflow-y: auto;
+                z-index: 100;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                width: 250px;
+            }
+
+            .hashtag-suggestion {
+                padding: 8px 12px;
+                cursor: pointer;
+                border-bottom: 1px solid #eee;
+            }
+
+            .hashtag-suggestion:hover {
+                background-color: #f5f5f5;
+            }
+
+            .hashtag-input-container {
+                position: relative;
+                display: inline-block;
+            }
+
+            .profile-btn {
+                margin-top: 20px;
+                text-align: center;
+            }
+
+            .hidden {
+                display: none;
+            }
+
+            #fileInput {
+                display: none;
+            }
+
+            .progress-container {
+                width: 100%;
+                margin-bottom: 15px;
+            }
+
+            .progress {
+                height: 20px;
+                background-color: #f0f0f0;
+                border-radius: 4px;
+                overflow: hidden;
+            }
+
+            .progress-bar {
+                height: 100%;
+                background-color: #4285f4;
+                transition: width 0.3s ease;
+            }
+
+            .progress-text {
+                text-align: center;
+                margin-top: 5px;
+                font-size: 14px;
+                color: #555;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Главный экран</h1>
+
+            <textarea class="post-input" placeholder="Введите текст поста..."></textarea>
+
+            <div class="buttons">
+                <button id="generateHashtags" class="btn btn-secondary">Сгенерировать хештеги</button>
+                <button id="addMedia" class="btn btn-secondary">Добавить медиа</button>
+                <input type="file" id="fileInput" multiple accept="image/*,video/*" />
+            </div>
+
+            <div class="media-container" id="mediaContainer"></div>
+
+            <div class="hashtags-container" id="hashtagsContainer">
+                <button class="add-hashtag" id="addHashtagBtn">+</button>
+            </div>
+
+            <button id="publishPost" class="btn btn-primary">Опубликовать пост</button>
+
+            <div class="profile-btn">
+                <button id="profileBtn" class="btn btn-secondary">Профиль</button>
+            </div>
+
+            <div id="uploadProgress" class="progress-container" style="display: none; margin-top: 15px;">
+                <div class="progress">
+                    <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;"></div>
+                </div>
+                <div id="progressText" class="progress-text">0%</div>
+            </div>
+        </div>
+
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const postInput = document.querySelector(".post-input");
+                const generateHashtagsBtn = document.getElementById("generateHashtags");
+                const addMediaBtn = document.getElementById("addMedia");
+                const fileInput = document.getElementById("fileInput");
+                const mediaContainer = document.getElementById("mediaContainer");
+                const hashtagsContainer = document.getElementById("hashtagsContainer");
+                const addHashtagBtn = document.getElementById("addHashtagBtn");
+                const publishPostBtn = document.getElementById("publishPost");
+                const profileBtn = document.getElementById("profileBtn");
+
+                let hashtags = [];
+                let mediaFiles = [];
+
+                // Добавление media
+                addMediaBtn.addEventListener("click", function () {
+                    fileInput.click();
+                });
+
+                fileInput.addEventListener("change", function (e) {
+                    const files = Array.from(e.target.files);
+                    mediaFiles = [...mediaFiles, ...files];
+                    renderMedia();
+                    fileInput.value = ""; // Сбрасываем значение, чтобы можно было добавить те же файлы снова
+                });
+
+                function renderMedia() {
+                    mediaContainer.innerHTML = "";
+                    mediaFiles.forEach((file, index) => {
+                        const reader = new FileReader();
+                        reader.onload = function (e) {
+                            const thumbnail = document.createElement("div");
+                            thumbnail.className = "media-thumbnail";
+
+                            if (file.type.startsWith("image/")) {
+                                const img = document.createElement("img");
+                                img.src = e.target.result;
+                                thumbnail.appendChild(img);
+                            } else if (file.type.startsWith("video/")) {
+                                const video = document.createElement("video");
+                                video.src = e.target.result;
+                                video.controls = false;
+                                thumbnail.appendChild(video);
+
+                                const playIcon = document.createElement("div");
+                                playIcon.className = "play-icon";
+                                playIcon.innerHTML = "▶";
+                                thumbnail.appendChild(playIcon);
+                            }
+
+                            const deleteBtn = document.createElement("button");
+                            deleteBtn.className = "delete-photo";
+                            deleteBtn.innerHTML = "×";
+                            deleteBtn.addEventListener("click", function (e) {
+                                e.stopPropagation();
+                                removePhoto(index);
+                            });
+
+                            thumbnail.addEventListener("click", function () {
+                                // Показать превью в полном размере
+                                showMediaPreview(file, e.target.result);
+                            });
+
+                            thumbnail.appendChild(deleteBtn);
+                            mediaContainer.appendChild(thumbnail);
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                }
+
+                function showMediaPreview(file, url) {
+                    // Реализация просмотра медиа в полном размере
+                    const preview = document.createElement("div");
+                    preview.className = "media-preview-overlay";
+
+                    const content = document.createElement("div");
+                    content.className = "media-preview-content";
+
+                    if (file.type.startsWith("image/")) {
+                        const img = document.createElement("img");
+                        img.src = url;
+                        content.appendChild(img);
+                    } else if (file.type.startsWith("video/")) {
+                        const video = document.createElement("video");
+                        video.src = url;
+                        video.controls = true;
+                        video.autoplay = true;
+                        content.appendChild(video);
+                    }
+
+                    const closeBtn = document.createElement("button");
+                    closeBtn.className = "close-preview";
+                    closeBtn.innerHTML = "×";
+                    closeBtn.addEventListener("click", function () {
+                        document.body.removeChild(preview);
+                    });
+
+                    content.appendChild(closeBtn);
+                    preview.appendChild(content);
+                    document.body.appendChild(preview);
+                }
+
+                function removePhoto(index) {
+                    mediaFiles.splice(index, 1);
+                    renderMedia();
+                }
+
+                // Генерация хештегов
+                generateHashtagsBtn.addEventListener("click", function () {
+                    const postText = postInput.value;
+                    if (!postText.trim()) {
+                        alert("Введите текст поста для генерации хештегов");
+                        return;
+                    }
+
+                    // Запрос к API для генерации хештегов
+                    fetch("/api/generate_hashtags", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/x-www-form-urlencoded",
+                            "X-CSRFToken": getCookie("csrftoken"),
+                        },
+                        body: new URLSearchParams({ text: postText }),
+                    })
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error("Network response was not ok");
+                            }
+                            return response.json();
+                        })
+                        .then((data) => {
+                            if (data.hashtags && data.hashtags.length > 0) {
+                                // Добавляем только новые уникальные хештеги
+                                data.hashtags.forEach((tag) => {
+                                    const fullTag = tag.startsWith("#") ? tag : `#${tag}`;
+                                    if (!hashtags.includes(fullTag)) {
+                                        hashtags.push(fullTag);
+                                        createHashtagElement(fullTag);
+                                    }
+                                });
+                            }
+                        })
+                        .catch((error) => {
+                            console.error("Error:", error);
+                        });
+                });
+
+                function renderHashtags() {
+                    // Очищаем контейнер, но сохраняем кнопку добавления
+                    const containers = document.querySelectorAll(".hashtag-input-container");
+                    containers.forEach((container) => {
+                        hashtagsContainer.removeChild(container);
+                    });
+
+                    // Создаем элементы для всех хештегов
+                    hashtags.forEach((tag) => {
+                        createHashtagElement(tag);
+                    });
+                }
+
+                function createHashtagElement(tag, isNew = false) {
+                    const container = document.createElement("div");
+                    container.className = "hashtag-input-container";
+                    container.dataset.tag = tag;
+
+                    const hashtagDiv = document.createElement("div");
+                    hashtagDiv.className = "hashtag";
+
+                    const input = document.createElement("input");
+                    input.type = "text";
+                    input.className = "hashtag-input";
+                    input.value = tag.startsWith("#") ? tag : `#${tag}`;
+                    input.placeholder = "#хештег";
+
+                    const suggestionsDiv = document.createElement("div");
+                    suggestionsDiv.className = "hashtag-suggestions hidden";
+
+                    let debounceTimer = null;
+
+                    // Функция для полного удаления хештега
+                    const removeHashtag = () => {
+                        container.remove();
+                        hashtags = hashtags.filter((t) => t !== tag);
+                    };
+
+                    // Обработчик ввода текста
+                    input.addEventListener("input", function () {
+                        clearTimeout(debounceTimer);
+
+                        const inputValue = input.value.startsWith("#") ? input.value.slice(1) : input.value;
+                        suggestionsDiv.innerHTML = "";
+                        suggestionsDiv.classList.add("hidden");
+
+                        if (inputValue.length < 1) return;
+
+                        debounceTimer = setTimeout(() => {
+                            fetch("/api/suggest_hashtags", {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/x-www-form-urlencoded",
+                                    "X-CSRFToken": getCookie("csrftoken"),
+                                },
+                                body: new URLSearchParams({ prefix: inputValue }),
+                            })
+                                .then((response) => response.json())
+                                .then((data) => {
+                                    if (data.suggestions?.length > 0) {
+                                        suggestionsDiv.innerHTML = "";
+                                        data.suggestions.forEach((suggestion) => {
+                                            const suggestionElement = document.createElement("div");
+                                            suggestionElement.className = "hashtag-suggestion";
+                                            suggestionElement.textContent = `#${suggestion}`;
+
+                                            suggestionElement.addEventListener("mousedown", (e) => {
+                                                e.preventDefault();
+                                                const newTag = `#${suggestion}`;
+                                                input.value = newTag;
+
+                                                // Обновляем массив хештегов
+                                                const index = hashtags.indexOf(tag);
+                                                if (index !== -1) {
+                                                    hashtags[index] = newTag;
+                                                    container.dataset.tag = newTag;
+                                                }
+
+                                                suggestionsDiv.classList.add("hidden");
+                                            });
+
+                                            suggestionsDiv.appendChild(suggestionElement);
+                                        });
+                                        suggestionsDiv.classList.remove("hidden");
+                                    }
+                                })
+                                .catch(console.error);
+                        }, 300);
+                    });
+
+                    // Обработчик потери фокуса
+                    input.addEventListener("blur", function () {
+                        setTimeout(() => {
+                            suggestionsDiv.classList.add("hidden");
+
+                            const newValue = input.value.trim();
+                            if (!newValue) {
+                                removeHashtag();
+                                return;
+                            }
+
+                            const formattedValue = newValue.startsWith("#") ? newValue : `#${newValue}`;
+                            input.value = formattedValue;
+
+                            // Обновляем массив, если значение изменилось
+                            if (formattedValue !== tag) {
+                                const index = hashtags.indexOf(tag);
+                                if (index !== -1) {
+                                    hashtags[index] = formattedValue;
+                                    container.dataset.tag = formattedValue;
+                                }
+                            }
+                        }, 200);
+                    });
+
+                    // Обработчик нажатия Enter
+                    input.addEventListener("keydown", function (e) {
+                        if (e.key === "Enter") {
+                            input.blur();
+                        }
+                    });
+
+                    // Кнопка удаления
+                    const removeBtn = document.createElement("span");
+                    removeBtn.className = "hashtag-remove";
+                    removeBtn.innerHTML = "×";
+                    removeBtn.addEventListener("click", removeHashtag);
+
+                    hashtagDiv.appendChild(input);
+                    hashtagDiv.appendChild(removeBtn);
+                    container.appendChild(hashtagDiv);
+                    container.appendChild(suggestionsDiv);
+                    hashtagsContainer.insertBefore(container, addHashtagBtn);
+
+                    if (isNew) input.focus();
+                }
+
+                function addNewHashtag() {
+                    const newTag = "#";
+                    if (!hashtags.includes(newTag)) {
+                        hashtags.push(newTag);
+                        createHashtagElement(newTag, true);
+                    }
+                }
+
+                function renderGeneratedHashtags(newTags) {
+                    newTags.forEach((tag) => {
+                        const formattedTag = tag.startsWith("#") ? tag : `#${tag}`;
+                        if (!hashtags.includes(formattedTag)) {
+                            hashtags.push(formattedTag);
+                            createHashtagElement(formattedTag);
+                        }
+                    });
+                }
+
+                addHashtagBtn.addEventListener("click", addNewHashtag);
+
+                // Публикация поста
+
+                async function uploadPost() {
+                    const progressContainer = document.getElementById("uploadProgress");
+                    const progressBar = document.getElementById("progressBar");
+                    const progressText = document.getElementById("progressText");
+
+                    // Показываем прогресс-бар
+                    progressContainer.style.display = "block";
+                    progressBar.style.width = "0%";
+                    progressText.textContent = "0%";
+
+                    try {
+                        // Собираем FormData
+                        const formData = new FormData();
+                        formData.append("text", postInput.value.trim());
+
+                        // Фильтруем пустые хештеги перед отправкой
+                        hashtags = hashtags.filter((tag) => {
+                            const container = document.querySelector(`.hashtag-input-container[data-tag="${tag}"]`);
+                            if (!container) return false; // Удаляем хештеги без UI элемента
+
+                            const input = container.querySelector(".hashtag-input");
+                            return input && input.value.trim() !== "";
+                        });
+
+                        hashtags.forEach((tag) => formData.append("hashtags", tag));
+
+                        // Разделяем файлы на изображения и видео
+                        mediaFiles.forEach((file) => {
+                            if (file.type.startsWith("image/")) {
+                                formData.append("images", file);
+                            } else if (file.type.startsWith("video/")) {
+                                formData.append("videos", file);
+                            }
+                        });
+
+                        // Отправляем запрос с отслеживанием прогресса
+                        const xhr = new XMLHttpRequest();
+
+                        xhr.upload.onprogress = function (e) {
+                            if (e.lengthComputable) {
+                                const percent = Math.round((e.loaded / e.total) * 100);
+                                progressBar.style.width = percent + "%";
+                                progressText.textContent = percent + "%";
+                            }
+                        };
+
+                        const promise = new Promise((resolve, reject) => {
+                            xhr.onload = function () {
+                                if (xhr.status >= 200 && xhr.status < 300) {
+                                    resolve(JSON.parse(xhr.response));
+                                } else {
+                                    reject(new Error(xhr.statusText));
+                                }
+                            };
+
+                            xhr.onerror = function () {
+                                reject(new Error("Network Error"));
+                            };
+                        });
+
+                        xhr.open("POST", "/api/create_post", true);
+                        xhr.setRequestHeader("X-CSRFToken", getCookie("csrftoken"));
+                        xhr.send(formData);
+
+                        const data = await promise;
+
+                        if (data.success) {
+                            alert("Пост успешно опубликован!");
+                            // Сброс формы
+                            postInput.value = "";
+                            mediaFiles = [];
+                            mediaContainer.innerHTML = "";
+                            hashtags = [];
+                            renderHashtags();
+                        } else {
+                            throw new Error(data.error || "Неизвестная ошибка");
+                        }
+                    } catch (error) {
+                        console.error("Upload error:", error);
+                        alert("Ошибка при публикации: " + error.message);
+                    } finally {
+                        progressContainer.style.display = "none";
+                    }
+                }
+
+                // Обновляем обработчик кнопки
+                publishPostBtn.addEventListener("click", function () {
+                    uploadPost().catch((error) => {
+                        console.error("Unhandled error:", error);
+                    });
+                });
+
+                // Переход в профиль
+                profileBtn.addEventListener("click", function () {
+                    window.location.href = "/profile";
+                });
+
+                // Вспомогательная функция для получения CSRF токена
+                function getCookie(name) {
+                    let cookieValue = null;
+                    if (document.cookie && document.cookie !== "") {
+                        const cookies = document.cookie.split(";");
+                        for (let i = 0; i < cookies.length; i++) {
+                            const cookie = cookies[i].trim();
+                            if (cookie.substring(0, name.length + 1) === name + "=") {
+                                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                                break;
+                            }
+                        }
+                    }
+                    return cookieValue;
+                }
+            });
+        </script>
+    </body>
+
+    <script src="static/bootstrap-5.3.2-dist/js/jquery3.7.1.js"></script>
+    <script src="static/bootstrap-5.3.2-dist/js/bootstrap.bundle.min.js"></script>
+    <script src="static/app.js"></script>
 </html>
+
