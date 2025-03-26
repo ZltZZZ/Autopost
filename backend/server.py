@@ -127,7 +127,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost", "http://192.168.50.77", "http://172.17.7.12"], 
+    allow_origins=["http://localhost", "http://autopost.work.gd"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -192,7 +192,7 @@ async def profile_page(request: Request, access_token: Annotated[str, Cookie()] 
 @app.options("/api/{path:path}")
 async def options_handler():
     return Response(headers={
-        "Access-Control-Allow-Origin": "http://192.168.50.77",
+        "Access-Control-Allow-Origin": "http://autopost.work.gd",
         "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Cookie",
         "Access-Control-Allow-Credentials": "true"
