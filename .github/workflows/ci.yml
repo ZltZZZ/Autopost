@@ -44,6 +44,7 @@ jobs:
             --label "automerge")
 
           echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+          echo "branch_name=$NEW_BRANCH" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -55,5 +56,16 @@ jobs:
           
           # Включаем automerge
           gh pr merge "$PR_NUMBER" --auto --merge
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete branch after merge
+        if: success()
+        run: |
+          BRANCH_NAME="${{ steps.bump.outputs.branch_name }}"
+          gh api \
+            --method DELETE \
+            -H "Accept: application/vnd.github.v3+json" \
+            "/repos/${{ github.repository }}/git/refs/heads/$BRANCH_NAME"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
