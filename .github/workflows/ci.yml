@@ -1,29 +1,71 @@
-name: Bump version
+name: Bump version and Auto-Merge
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [closed]
 
 jobs:
   bump-version:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
 
-    - name: Install bump2version
-      run: pip install bump2version
+      - name: Install bump2version
+        run: pip install bump2version
 
-    - name: Bump version
-      run: |
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
-        bump2version patch  # или minor, major в зависимости от типа изменения
-        git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" main
+      - name: Bump version and create PR
+        id: bump
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+          NEW_BRANCH="bump-version-$(date +%s)"
+          git checkout -b "$NEW_BRANCH"
+          bump2version patch
+          git push origin "$NEW_BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "Bump version (automated)" \
+            --body "Automated version bump" \
+            --base main \
+            --head "$NEW_BRANCH" \
+            --label "automerge")
+
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+          echo "branch_name=$NEW_BRANCH" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-merge PR
+        if: success()
+        run: |
+          PR_URL="${{ steps.bump.outputs.pr_url }}"
+          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+          
+          # Включаем automerge
+          gh pr merge "$PR_NUMBER" --auto --merge
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete branch after merge
+        if: success()
+        run: |
+          BRANCH_NAME="${{ steps.bump.outputs.branch_name }}"
+          gh api \
+            --method DELETE \
+            -H "Accept: application/vnd.github.v3+json" \
+            "/repos/${{ github.repository }}/git/refs/heads/$BRANCH_NAME"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
