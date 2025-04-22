@@ -1,8 +1,6 @@
 name: Bump version and Auto-Merge
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
     types: [closed]
