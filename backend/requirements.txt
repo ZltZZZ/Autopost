@@ -6,7 +6,6 @@ python-dotenv==1.0.0
 alembic==1.13.1
 
 pydantic==1.10.4
-ormar==0.12.1
 asyncpg==0.27.0
 
 python-keycloak==2.16.0

@@ -1,116 +1,165 @@
-import databases
-import ormar
-import sqlalchemy
+import uuid
 from datetime import datetime
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import MetaData, Table, Column, Integer, String, Boolean, Text, DateTime, ForeignKey
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import registry, relationship, sessionmaker
 from settings import settings
+from sqlalchemy import text
 
-database = databases.Database(settings.POSTGRES_URL.replace("postgresql://", "postgresql+asyncpg://"))
+DATABASE_URL = f"postgresql+asyncpg://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@db:5432/{settings.POSTGRES_DB}"
+mapper_registry = registry()
+metadata = MetaData()
 
-# Асинхронное подключение
-async_engine = create_async_engine(
-    settings.POSTGRES_URL.replace("postgresql://", "postgresql+asyncpg://")
+users = Table(
+    "users",
+    metadata,
+    Column("id", String(100), primary_key=True, default=lambda: str(uuid.uuid4())),
+    Column("username", String(128), unique=True, nullable=False),
+    Column("email", String(128), unique=True, nullable=False),
+    Column("is_active", Boolean, default=True, nullable=False)
 )
 
-metadata = sqlalchemy.MetaData()  # контейнер для хранения описания таблиц
+sessions = Table(
+    "sessions",
+    metadata,
+    Column("id", String(100), primary_key=True, default=lambda: str(uuid.uuid4())),
+    Column("user_id", String(100), ForeignKey("users.id")),
+    Column("started_at", DateTime, default=datetime.now),
+    Column("last_access", DateTime, default=datetime.now),
+    Column("ip_address", String(50)),
+    Column("user_agent", String(200), nullable=True),
+    Column("is_active", Boolean, default=True, nullable=False)
+)
 
-class BaseMeta(ormar.ModelMeta):
-    metadata = metadata
-    database = database
+temp_links = Table(
+    "temp_links",
+    metadata,
+    Column("id", String(100), primary_key=True, default=lambda: str(uuid.uuid4())),
+    Column("user_id", String(100), ForeignKey("users.id")),
+    Column("token", String(200), unique=True),
+    Column("created_at", DateTime, default=datetime.now),
+    Column("expires_at", DateTime)
+)
 
+posts = Table(
+    "posts",
+    metadata,
+    Column("id", String(50), primary_key=True, default=lambda: str(uuid.uuid4())),
+    Column("user_id", String(100), ForeignKey("users.id")),
+    Column("text", Text),
+    Column("created_at", DateTime, default=datetime.now)
+)
 
-class User(ormar.Model):
-    class Meta(BaseMeta):
-        tablename = "users"
+post_media = Table(
+    "post_media",
+    metadata,
+    Column("id", String(50), primary_key=True, default=lambda: str(uuid.uuid4())),
+    Column("post_id", String(50), ForeignKey("posts.id")),
+    Column("file_type", String(20)),  # 'image' или 'video'
+    Column("file_path", String(200))
+)
 
-    id: int = ormar.Integer(primary_key=True)
-    email: str = ormar.String(max_length=128, unique=True, nullable=False)
-    username: str = ormar.String(max_length=128, unique=True, nullable=False)
-    is_active: bool = ormar.Boolean(default=True, nullable=False)
-    password_hash: str = ormar.String(max_length=128, unique=False, nullable=False)
+user_tokens = Table(
+    "user_tokens",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("user_id", String(100), ForeignKey("users.id")),
+    Column("service", String(20)),  # 'telegram', 'vk', 'ok'
+    Column("token_type", String(20)),  # 'bot', 'chat', 'group', 'user'
+    Column("token_value", String(200)),
+    Column("last_updated", DateTime, default=datetime.now)
+)
 
-class Session(ormar.Model):
-    class Meta(BaseMeta):
-        tablename = "sessions"
+class User:
+    def __init__(self, id: str, username: str, email: str, is_active: bool = True):
+        self.id = id
+        self.username = username
+        self.email = email
+        self.is_active = is_active
+    
+    def __repr__(self):
+        return f"<User(username='{self.username}', email='{self.email}')>"
 
-    id: str = ormar.String(max_length=50, primary_key=True)
-    user: User = ormar.ForeignKey(User)
-    started_at: datetime = ormar.DateTime(default=datetime.now)
-    last_access: datetime = ormar.DateTime(default=datetime.now)
-    ip_address: str = ormar.String(max_length=50)
-    user_agent: str = ormar.String(max_length=200, nullable=True)
+class Session:
+    def __init__(self, user_id: str, ip_address: str, user_agent: str = None, is_active: bool = True):
+        self.user_id = user_id
+        self.ip_address = ip_address
+        self.user_agent = user_agent
+        self.is_active = is_active
+    
+    def __repr__(self):
+        return f"<Session(user_id='{self.user_id}', ip='{self.ip_address}')>"
 
-class TemporaryLink(ormar.Model):
-    class Meta(BaseMeta):
-        tablename = "temporary_links"
+class TemporaryLink:
+    def __init__(self, user_id: str, token: str, expires_at: datetime):
+        self.user_id = user_id
+        self.token = token
+        self.expires_at = expires_at
+    
+    def __repr__(self):
+        return f"<TemporaryLink(user_id='{self.user_id}', token='{self.token[:5]}...')>"
 
-    id: str = ormar.String(max_length=100, primary_key=True)
-    user: User = ormar.ForeignKey(User)
-    token: str = ormar.String(max_length=200, unique=True)
-    created_at: datetime = ormar.DateTime(default=datetime.now)
-    expires_at: datetime = ormar.DateTime()
-    is_used: bool = ormar.Boolean(default=False)
+class Post:
+    def __init__(self, user_id: str, text: str):
+        self.user_id = user_id
+        self.text = text
+    
+    def __repr__(self):
+        return f"<Post(user_id='{self.user_id}', text='{self.text[:20]}...')>"
 
-class Post(ormar.Model):
-    class Meta(BaseMeta):
-        tablename = "posts"
+class PostMedia:
+    def __init__(self, post_id: str, file_type: str, file_path: str):
+        self.post_id = post_id
+        self.file_type = file_type
+        self.file_path = file_path
+    
+    def __repr__(self):
+        return f"<PostMedia(post_id='{self.post_id}', type='{self.file_type}')>"
 
-    id: str = ormar.String(max_length=50, primary_key=True)
-    user: User = ormar.ForeignKey(User)
-    text: str = ormar.Text()
-    created_at: datetime = ormar.DateTime(default=datetime.now)
+class UserToken:
+    def __init__(self, user_id: str, service: str, token_type: str, token_value: str):
+        self.user_id = user_id
+        self.service = service
+        self.token_type = token_type
+        self.token_value = token_value
+    
+    def __repr__(self):
+        return f"<UserToken(user_id='{self.user_id}', service='{self.service}')>"
 
-class PostMedia(ormar.Model):
-    class Meta(BaseMeta):
-        tablename = "post_media"
+mapper_registry.map_imperatively(User, users, properties={
+    'sessions': relationship(Session, backref='user'),
+    'temp_links': relationship(TemporaryLink, backref='user'),
+    'posts': relationship(Post, backref='user'),
+    'tokens': relationship(UserToken, backref='user')
+})
+mapper_registry.map_imperatively(Session, sessions)
+mapper_registry.map_imperatively(TemporaryLink, temp_links)
+mapper_registry.map_imperatively(Post, posts, properties={
+    'media': relationship(PostMedia, backref='post')
+})
+mapper_registry.map_imperatively(PostMedia, post_media)
+mapper_registry.map_imperatively(UserToken, user_tokens)
 
-    id: str = ormar.String(max_length=50, primary_key=True)
-    post: Post = ormar.ForeignKey(Post)
-    file_type: str = ormar.String(max_length=20)  # 'image' или 'video'
-    file_path: str = ormar.String(max_length=200)
-    upload_date: datetime = ormar.DateTime(default=datetime.now)
+async_engine = create_async_engine(DATABASE_URL, echo=True)
+async_session = sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
 
-class Hashtag(ormar.Model):
-    class Meta(BaseMeta):
-        tablename = "hashtags"
-
-    id: int = ormar.Integer(primary_key=True)
-    tag: str = ormar.String(max_length=50, unique=True)
-
-#многие ко многим
-class PostHashtag(ormar.Model):
-    class Meta(BaseMeta):
-        tablename = "post_hashtags"
-
-    id: int = ormar.Integer(primary_key=True)
-    post: Post = ormar.ForeignKey(Post)
-    hashtag: Hashtag = ormar.ForeignKey(Hashtag)
-
-class UserToken(ormar.Model):
-    class Meta(BaseMeta):
-        tablename = "user_tokens"
-
-    id: int = ormar.Integer(primary_key=True)
-    user: User = ormar.ForeignKey(User)
-    service: str = ormar.String(max_length=20)  # 'telegram', 'vk', 'ok'
-    token_type: str = ormar.String(max_length=20)  # 'bot', 'chat', 'group', 'user'
-    token_value: str = ormar.String(max_length=200)
-    last_updated: datetime = ormar.DateTime(default=datetime.now)
-
-async def check_db_connection():
-    try:
+class DatabaseManager:
+    async def connect(self):
+        """Проверка подключения к БД"""
         async with async_engine.connect() as conn:
-            print("✅ Асинхронное подключение к PostgreSQL успешно")
-        await database.connect()
-    except Exception as e:
-        print(f"❌ Ошибка асинхронного подключения: {e}")
-        raise
+            await conn.execute(text("SELECT 1"))
+        print("✅ Подключение к PostgreSQL успешно")
 
-async def create_tables():
-    try:
+    async def create_tables(self):
+        """Создание всех таблиц"""
         async with async_engine.begin() as conn:
             await conn.run_sync(metadata.create_all)
         print("✅ Таблицы успешно созданы")
-    except Exception as e:
-        print(f"❌ Ошибка при создании таблиц: {e}")
-        raise
+
+    async def drop_tables(self):
+        """Удаление всех таблиц"""
+        async with async_engine.begin() as conn:
+            await conn.run_sync(metadata.drop_all)
+        print("✅ Таблицы успешно удалены")
+
+db_manager = DatabaseManager()

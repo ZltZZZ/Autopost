@@ -5,6 +5,9 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
 
+    KEYCLOAK_ADMIN: str = os.getenv("KEYCLOAK_ADMIN")
+    KEYCLOAK_ADMIN_PASSWORD: str = os.getenv("KEYCLOAK_ADMIN_PASSWORD")
+
     KEYCLOAK_URL: str = os.getenv("KEYCLOAK_URL")
     REALM: str = os.getenv("REALM")
     CLIENT_ID: str = os.getenv("CLIENT_ID")
@@ -14,7 +17,6 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = os.getenv("DB_USER")
     POSTGRES_PASSWORD: str = os.getenv("DB_PASSWORD")
     POSTGRES_DB: str = os.getenv("DB_NAME")
-    POSTGRES_URL: str = f"postgresql+asyncpg://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@db:5432/{os.getenv('DB_NAME')}"
     BASE_URL: str = os.getenv("BASE_URL")
 
 settings = Settings()
