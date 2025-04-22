@@ -1,0 +1,31 @@
+name: Deploy with Docker
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+jobs:
+  build-and-deploy:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:      
+        - name: Checkout code
+        uses: actions/checkout@v4
+
+        - name: Copy to server
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          scp -r . user@your.server.example.com:/deploy
+
+        - name: Deploy to server
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          ssh -o StrictHostKeyChecking=no user@server_ip "
+            cd /deploy
+            docker-compose down
+            docker-compose up -d
+          "
