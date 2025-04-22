@@ -18,13 +18,13 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          scp -r .[a-zA-Z0-9]* fin@prod.autopost.work.gd:deploy
+          scp -r .[a-zA-Z0-9]* fin@95.55.28.43:deploy
 
       - name: Deploy to server
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          ssh -o StrictHostKeyChecking=no fin@prod.autopost.work.gd "
+          ssh -o StrictHostKeyChecking=no fin@95.55.28.43 "
             cd deploy
             docker-compose down -v
             docker-compose up --build -d
