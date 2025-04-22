@@ -33,5 +33,5 @@ jobs:
           port: ${{ secrets.PORT }}
           script: |
             cd deploy
-            docker-compose down -v
-            docker-compose up --build -d
+            docker compose down -v
+            docker compose up --build -d
