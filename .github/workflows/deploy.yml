@@ -10,17 +10,17 @@ jobs:
   build-and-deploy:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-    steps:      
-        - name: Checkout code
+    steps:
+      - name: Checkout code
         uses: actions/checkout@v4
 
-        - name: Copy to server
+      - name: Copy to server
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           scp -r .[a-zA-Z0-9]* fin@prod.autopost.work.gd:deploy
 
-        - name: Deploy to server
+      - name: Deploy to server
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
