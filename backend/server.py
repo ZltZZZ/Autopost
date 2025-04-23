@@ -9,7 +9,7 @@ from keycloak import KeycloakOpenID, KeycloakAdmin
 from starlette.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware 
 from datetime import datetime, timedelta
-from sqlalchemy import text
+from sqlalchemy import text, select, join
 
 import database
 from settings import settings
@@ -51,7 +51,6 @@ keycloak_openid = KeycloakOpenID(
     client_id=settings.CLIENT_ID,
     client_secret_key=settings.CLIENT_SECRET_KEY
 )
-
 options = {"verify_signature": True, "verify_aud": False, "verify_exp": True}
 
 def decode_token(token: str):
@@ -63,6 +62,7 @@ def decode_token(token: str):
         token_info = None
     return token_info
 
+#✅
 @app.get("/api/auth/check",  tags=["auth"])
 async def check_auth(access_token: Annotated[str, Cookie()] = ""):
     """Проверка токена"""
@@ -77,6 +77,7 @@ async def check_auth(access_token: Annotated[str, Cookie()] = ""):
         "redirect": redirect
     }
 
+#✅
 @app.get("/api/auth/logout", tags=["auth"])
 async def logout(refresh_token: Annotated[str | None, Cookie()] = None):
     """Выход и перенаправление на страницу аутентификации"""
@@ -86,6 +87,7 @@ async def logout(refresh_token: Annotated[str | None, Cookie()] = None):
     response.set_cookie(key="refresh_token", value="")
     return response
 
+#✅
 @app.get("/api/auth/callback",  tags=["auth"])
 async def auth_callback(code: str = "", request: Request = None):
     """Определение токена"""
@@ -106,55 +108,53 @@ async def get_current_user(access_token: Annotated[str, Cookie()] = "") -> datab
         return RedirectResponse(auth_url)
     user_id = token_info.get('sub')
 
-    async with database.db_manager.get_session() as session:
-        
-        # Получаем пользователя
-        result = await session.execute(
-            text("SELECT * FROM users WHERE id = :user_id"),
-            {"user_id": user_id}
-        )
-        user_data = result.mappings().fetchone() 
-        if not user_data:
-            raise HTTPException(status_code=404, detail="User not found")
-        user_dict = dict(user_data)
-
-        return database.User(
-            id=user_dict['id'],
-            username=user_dict['username'],
-            email=user_dict['email'],
-            is_active=user_dict['is_active']
-        )
-
-
-@app.get("/api/profile", tags=["profile"])
-async def profile_page(access_token: Annotated[str, Cookie()] = ""):
-    """Возвращает id профиля(если не аутентифицирован -> на страницу аутентификации)
-       Проверяет инфу о пользователе в базе, если нет такого пользователя, извлекает нужные данные из токена
-    """
-    if not access_token or not (token_info := decode_token(access_token)):
-        auth_url = keycloak_openid.auth_url(redirect_uri=settings.REDIRECT_URL)
-        return RedirectResponse(auth_url)
-    
-    username = token_info.get('preferred_username')
-    email = token_info.get('email')
-    #auth_time = token_info.get('auth_time')#время последней аутентификации пользователя
-    #name = token_info.get('name') #полное имя (first + last name)
-    profile_id = token_info.get('sub')  # Уникальный ID пользователя
-
-    # Получаем сессию через async_sessionmaker
     async with database.async_session() as session:
         try:
             async with session.begin():
-                # Проверяем существование пользователя
+                result = await session.execute(
+                    text("SELECT * FROM users WHERE id = :user_id"),
+                    {"user_id": user_id}
+                )
+                user_data = result.mappings().fetchone() 
+                if not user_data:
+                    raise HTTPException(status_code=404, detail="User not found")
+                user_dict = dict(user_data)
+
+        except Exception as e:
+            await session.rollback()
+            raise HTTPException(status_code=400, detail=str(e))
+        
+        return database.User(
+            id=user_dict['id'],
+            username=user_dict['username'],
+            name=user_dict['name'],
+            email=user_dict['email']
+        )
+
+#✅
+@app.get("/api/profile", tags=["profile"])
+async def profile_page(access_token: Annotated[str, Cookie()] = ""):
+    """Возвращает id профиля(если не аутентифицирован -> на страницу аутентификации) """
+    if not access_token or not (token_info := decode_token(access_token)):
+        auth_url = keycloak_openid.auth_url(redirect_uri=settings.REDIRECT_URL)
+        return RedirectResponse(auth_url)
+    profile_id = token_info.get('sub') 
+
+    async with database.async_session() as session:
+        try:
+            async with session.begin():
                 existing_user = await session.get(database.User, profile_id) # поиск по первичному ключу
                 
                 if existing_user is None:
-                    # Создаем нового пользователя
+                    username = token_info.get('preferred_username')
+                    email = token_info.get('email')
+                    name = token_info.get('name') #полное имя (first + last name)
+
                     new_user = database.User(
                         id=profile_id,
                         username=username,
+                        name=name,
                         email=email,
-                        is_active=True
                     )
                     session.add(new_user)
                     await session.commit()
@@ -174,6 +174,9 @@ async def get_profile_data(profile_id: str, access_token: Annotated[str, Cookie(
         return RedirectResponse(auth_url)
     
     user_id = token_info.get('sub')
+
+    if profile_id != user_id:
+        raise HTTPException(status_code=403, detail=f"Error Access rights error")
 
     async with database.async_session() as session:
         async with session.begin():
@@ -196,12 +199,13 @@ async def get_profile_data(profile_id: str, access_token: Annotated[str, Cookie(
         "user_info": [
             { 
                 "username": user_info.username,
-                "email": user_info.email
+                "email": user_info.email,
+                "name": user_info.name
             }
         ],
         "user_sessions": [
             {
-                "id": session.id, #id сессии! 
+                "id": session.id, #id сессии 
                 "started_at": session.started_at,
                 "last_access": session.last_access,
                 "ip_address": session.ip_address
@@ -242,14 +246,14 @@ async def get_sessions(profile_id: str, access_token: Annotated[str, Cookie()] =
         # Получаем user_id из токена
         user_id = token_info.get("sub")
         keycloak_admin = KeycloakAdmin(
-    server_url="http://0.0.0.0:8080",
-    username=settings.KEYCLOAK_ADMIN,
-    password=settings.KEYCLOAK_ADMIN_PASSWORD,
-    realm_name=settings.REALM,
-    client_id=settings.CLIENT_ID,
-    verify=False,  # отключаем проверку для dev
-    auto_refresh_token=['get', 'put', 'post', 'delete']
-)
+            server_url=settings.KEYCLOAK_URL,
+            username=settings.KEYCLOAK_ADMIN,
+            password=settings.KEYCLOAK_ADMIN_PASSWORD,
+            realm_name=settings.REALM,
+            client_id=settings.CLIENT_ID,
+            verify=False,  # отключаем проверку для dev
+            auto_refresh_token=['get', 'put', 'post', 'delete']
+        )
         # Получаем список сессий через Admin API
         sessions = keycloak_admin.get_user_sessions(user_id)
        
@@ -257,11 +261,12 @@ async def get_sessions(profile_id: str, access_token: Annotated[str, Cookie()] =
         formatted_sessions = []
         for session in sessions:
             formatted_sessions.append({
-                "session_id": session.get("id"),
+                "sid": session.get("id"),
+                "user_id": session.get("userId"),
                 "ip_address": session.get("ipAddress"),
                 "started_at": datetime.fromtimestamp(session.get("start")/1000).isoformat(),
                 "last_accessed": datetime.fromtimestamp(session.get("lastAccess")/1000).isoformat(),
-               "expires_at": datetime.fromtimestamp(session.get("expiration")/1000).isoformat(),
+                "expires_at": datetime.fromtimestamp(session.get("expiration")/1000).isoformat(),
                 "client_id": session.get("clientId"),
                 "current": session.get("id") == token_info.get("sid")  # текущая ли сессия
             })
@@ -282,11 +287,6 @@ async def terminate_session(
     if not access_token or not (token_info := decode_token(access_token)):
         auth_url = keycloak_openid.auth_url(redirect_uri=settings.REDIRECT_URL)
         return RedirectResponse(auth_url)
-
-    user = await database.User.objects.get_or_none(id = token_info.get('sub'))
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
     
     #try:
     #    # Получаем user_id из токена
@@ -341,6 +341,12 @@ async def get_temp_links(profile_id: str, access_token: Annotated[str, Cookie()]
     if not access_token or not (token_info := decode_token(access_token)):
         auth_url = keycloak_openid.auth_url(redirect_uri=settings.REDIRECT_URL)
         return RedirectResponse(auth_url)
+    
+    user_id = token_info.get('sub')
+
+    if profile_id != user_id:
+        raise HTTPException(status_code=403, detail=f"Error Access rights error")
+    
     pass
 
 @app.delete("/api/profile/{profile_id}/temp-links/{link_id}", tags=["profile"])
@@ -352,6 +358,10 @@ async def revoke_temp_link(
     if not access_token or not (token_info := decode_token(access_token)):
         auth_url = keycloak_openid.auth_url(redirect_uri=settings.REDIRECT_URL)
         return RedirectResponse(auth_url)
+    user_id = token_info.get('sub')
+
+    if profile_id != user_id:
+        raise HTTPException(status_code=403, detail=f"Error Access rights error")
     
     user = await database.User.objects.get_or_none(email=token_info.get("email"))
     if not user:
@@ -368,14 +378,34 @@ async def revoke_temp_link(
         logger.error(f"Error revoking temporary link: {e}")
         raise HTTPException(status_code=500, detail="Failed to revoke link")
 
-
+#✅
 @app.get("/api/profile/{profile_id}/posts", tags=["posts"])
 async def get_posts(profile_id: str, access_token: Annotated[str, Cookie()] = ""):
-    """Получить все посты (с полнотекстовым поиском)"""
+    """Получить пост пользователя"""
     if not access_token or not (token_info := decode_token(access_token)):
         auth_url = keycloak_openid.auth_url(redirect_uri=settings.REDIRECT_URL)
         return RedirectResponse(auth_url)
-    pass
+    
+    user_id = token_info.get('sub')
+
+    if profile_id != user_id:
+        raise HTTPException(status_code=403, detail=f"Error Access rights error")
+
+    async with database.async_session() as session:
+        try:
+            async with session.begin():
+                result = await session.execute(
+                    text("SELECT * FROM posts WHERE id = :user_id"),
+                    {"user_id": user_id}
+                )
+                posts_data = result.mappings().fetchone() 
+                if not posts_data:
+                    return {"message": "User not exists", "user_id": -1}
+                user_post = dict(posts_data)
+                return {"message": "User exists", "user_id": user_post.id}
+        except Exception as e:
+            await session.rollback()
+            raise HTTPException(status_code=400, detail=str(e))  
 
 @app.get("/api/profile/{profile_id}/posts/{post_id}", tags=["posts"])
 async def get_post(profile_id: str, post_id: str, access_token: Annotated[str, Cookie()] = ""):
@@ -383,109 +413,129 @@ async def get_post(profile_id: str, post_id: str, access_token: Annotated[str, C
     if not access_token or not (token_info := decode_token(access_token)):
         auth_url = keycloak_openid.auth_url(redirect_uri=settings.REDIRECT_URL)
         return RedirectResponse(auth_url)
-    pass
+    
+    user_id = token_info.get('sub')
 
+    if profile_id != user_id:
+        raise HTTPException(status_code=403, detail=f"Error Access rights error")
+
+    async with database.async_session() as session:
+        try:
+            async with session.begin():
+                query = (
+                    select(
+                database.posts.c.text,
+                database.posts.c.created_at,
+                database.post_media.c.id.label("media_id"),
+                database.post_media.c.file_type,
+                database.post_media.c.file_path
+            )
+            .select_from(
+                join(database.posts, database.post_media, database.posts.c.id == database.post_media.c.post_id)
+            )
+            .where(
+                (database.posts.c.id == post_id) & 
+                (database.posts.c.user_id == profile_id) 
+            )
+            )
+        
+            result = await session.execute(query)
+            post_data = result.fetchall()
+        
+            if not post_data:
+                raise HTTPException(status_code=404, detail="Post not found")
+
+        except Exception as e:
+            await session.rollback()
+            raise HTTPException(status_code=400, detail=str(e))
+        
+        response = {
+            "post_info": {
+                "text": post_data[0].text,
+                "created_at": post_data[0].created_at.isoformat(),
+                "media": [
+                    {
+                        "id": item.media_id,
+                        "file_type": item.file_type,
+                        "file_path": item.file_path
+                    } for item in post_data
+                ]
+            }
+        }
+        
+        return response
+
+#✅
 @app.post("/api/profile/{profile_id}/posts/", tags=["posts"])
 async def create_post(
         profile_id: str,
-        text: str = Form(...),
-        hashtags: List[str] = Form([]),
-        images: List[UploadFile] = File([]),
-        videos: List[UploadFile] = File([]), 
         access_token: Annotated[str, Cookie()] = ""
 ):
     if not access_token or not (token_info := decode_token(access_token)):
         auth_url = keycloak_openid.auth_url(redirect_uri=settings.REDIRECT_URL)
         return RedirectResponse(auth_url)
     
-    saved_media = []
-    os.makedirs("media", exist_ok=True)
+    user_id = token_info.get('sub')
 
-    for image in images:
-        if image.content_type not in ["image/jpeg", "image/png", "image/gif"]:
-            continue
+    if profile_id != user_id:
+        raise HTTPException(status_code=403, detail=f"Error: Access rights error")
 
-        file_ext = os.path.splitext(image.filename)[1]
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"image_{timestamp}_{uuid.uuid4().hex}{file_ext}"
-        file_path = os.path.join("media", filename)
-
-        with open(file_path, "wb") as buffer:
-            buffer.write(await image.read())
-
-        saved_media.append({"type": "image", "filename": filename})
-
-    for video in videos:
-        if video.content_type not in ["video/mp4", "video/webm", "video/ogg"]:
-            continue
-
-        file_ext = os.path.splitext(video.filename)[1]
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"video_{timestamp}_{uuid.uuid4().hex}{file_ext}"
-        file_path = os.path.join("media", filename)
-
-        with open(file_path, "wb") as buffer:
-            buffer.write(await video.read())
-
-        saved_media.append({"type": "video", "filename": filename})
-
-    post_id = str(uuid.uuid4())
-    posts_storage[post_id] = {
-        "text": text,
-        "hashtags": hashtags,
-        "media": saved_media  # Объединенный список медиафайлов
-    }
-
-    return {"success": True}
-
-@app.put("/api/profile/{profile_id}/posts/{post_id}", tags=["posts"])
+    async with database.async_session() as session:
+        try:
+            async with session.begin():
+                new_post = database.Post(
+                        user_id=user_id,
+                        text="",
+                        created_at=datetime.now()
+                )
+                session.add(new_post)
+                await session.commit()
+                await session.refresh(new_post)  # Обновляем объект, чтобы получить ID
+                return {"message": "New post", "post_id": new_post.id}
+            
+        except Exception as e:
+            await session.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error creating post: {str(e)}"
+            )
+    
+#✅
+@app.get("/api/profile/{profile_id}/posts/{post_id}/text", tags=["posts"])
 async def update_post(profile_id: str, post_id: str, access_token: Annotated[str, Cookie()] = ""):
     """Обновить существующий пост"""
     if not access_token or not (token_info := decode_token(access_token)):
         auth_url = keycloak_openid.auth_url(redirect_uri=settings.REDIRECT_URL)
         return RedirectResponse(auth_url)
-    pass
-async def update_tokens(
-    telegramBotToken: str = Form(None),
-    telegramChatId: str = Form(None),
-    vkGroupToken: str = Form(None),
-    vkUserToken: str = Form(None),
-    okGroupToken: str = Form(None),
-    access_token: Annotated[str, Cookie()] = ""
-):
-    if not access_token or not (token_info := decode_token(access_token)):
-        auth_url = keycloak_openid.auth_url(redirect_uri=settings.REDIRECT_URL)
-        return RedirectResponse(auth_url)
+    user_id = token_info.get('sub')
+
+    if profile_id != user_id:
+        raise HTTPException(status_code=403, detail=f"Error: Access rights error")
     
-    user = await database.User.objects.get_or_none(email=token_info.get("email"))
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    updates = {
-        ("telegram", "bot"): telegramBotToken,
-        ("telegram", "chat"): telegramChatId,
-        ("vk", "group"): vkGroupToken,
-        ("vk", "user"): vkUserToken,
-        ("ok", "group"): okGroupToken,
-    }
-
-    try:
-        for (service, token_type), token_value in updates.items():
-            if token_value is not None:
-                token, _ = await database.UserToken.objects.update_or_create(
-                    user=user,
-                    service=service,
-                    token_type=token_type,
-                    defaults={
-                        "token_value": token_value,
-                        "last_updated": datetime.now()
-                    }
+    async with database.async_session() as session:
+        try:
+            post = await session.get(Post, post_id)
+            if not post:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Post with id {post_id} not found"
                 )
-        return {"success": True}
-    except Exception as e:
-        logger.error(f"Error updating tokens: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update tokens")
 
+            await session.refresh(post, ["hashtags"])
+            hashtags = [hashtag.hashtag for hashtag in post.hashtags]
+
+            return {
+                "post_id": post_id,
+                "hashtags": hashtags,
+                "count": len(hashtags)
+            }
+            
+        except Exception as e:
+            await session.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error get text by post {post_id}: {str(e)}"
+            )
 
 @app.delete("/api/profile/{profile_id}/posts/{post_id}", tags=["posts"])
 async def delete_post(profile_id: str, post_id: str, access_token: Annotated[str, Cookie()] = ""):
@@ -493,7 +543,23 @@ async def delete_post(profile_id: str, post_id: str, access_token: Annotated[str
     if not access_token or not (token_info := decode_token(access_token)):
         auth_url = keycloak_openid.auth_url(redirect_uri=settings.REDIRECT_URL)
         return RedirectResponse(auth_url)
-    pass
+    user_id = token_info.get('sub')
+
+    if profile_id != user_id:
+        raise HTTPException(status_code=403, detail=f"Error: Access rights error")
+    
+    async with database.async_session() as session:
+        try:
+            async with session.begin():
+                post = await session.get(database.Post, post_id)
+                return {"text": post.text}
+            
+        except Exception as e:
+            await session.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error get text by post {post_id}: {str(e)}"
+            )
 
 @app.get("/api/profile/{profile_id}/posts/{post_id}/hashtags/", tags=["posts"])
 async def get_post_hashtags(profile_id: str, post_id: str, access_token: Annotated[str, Cookie()] = ""):
@@ -501,7 +567,26 @@ async def get_post_hashtags(profile_id: str, post_id: str, access_token: Annotat
     if not access_token or not (token_info := decode_token(access_token)):
         auth_url = keycloak_openid.auth_url(redirect_uri=settings.REDIRECT_URL)
         return RedirectResponse(auth_url)
-    pass
+    
+    user_id = token_info.get('sub')
+
+    if profile_id != user_id:
+        raise HTTPException(status_code=403, detail=f"Error: Access rights error")
+    
+    async with database.async_session() as session:
+        try:
+            async with session.begin():
+                post = await session.get(database.Post, post_id)
+                return {"hashtags": [{
+
+                }] }
+            
+        except Exception as e:
+            await session.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error get hashtags by post {post_id}: {str(e)}"
+            )
 
 @app.post("/api/profile/{profile_id}/posts/{post_id}/hashtags/generate", tags=["posts"])
 async def generate_post_hashtags(profile_id: str, post_id: str, text: str = Form(...), access_token: Annotated[str, Cookie()] = ""):

@@ -13,22 +13,21 @@ metadata = MetaData()
 users = Table(
     "users",
     metadata,
-    Column("id", String(100), primary_key=True, default=lambda: str(uuid.uuid4())),
+    Column("id", String(128), primary_key=True, nullable=False),
     Column("username", String(128), unique=True, nullable=False),
     Column("email", String(128), unique=True, nullable=False),
-    Column("is_active", Boolean, default=True, nullable=False)
+    Column("name", String(128), unique=False, nullable=False)
 )
 
 sessions = Table(
     "sessions",
     metadata,
-    Column("id", String(100), primary_key=True, default=lambda: str(uuid.uuid4())),
+    Column("sid", String(100), primary_key=True, nullable=False),
     Column("user_id", String(100), ForeignKey("users.id")),
     Column("started_at", DateTime, default=datetime.now),
     Column("last_access", DateTime, default=datetime.now),
     Column("ip_address", String(50)),
-    Column("user_agent", String(200), nullable=True),
-    Column("is_active", Boolean, default=True, nullable=False)
+    Column("user_agent", String(200), nullable=True)
 )
 
 temp_links = Table(
@@ -59,6 +58,14 @@ post_media = Table(
     Column("file_path", String(200))
 )
 
+post_hashtags = Table(
+    "post_hashtags",
+    metadata,
+    Column("id", String(50), primary_key=True, default=lambda: str(uuid.uuid4())),
+    Column("post_id", String(50), ForeignKey("posts.id")),
+    Column("hashtag", String(200))
+)
+
 user_tokens = Table(
     "user_tokens",
     metadata,
@@ -76,45 +83,36 @@ class User:
         self.username = username
         self.email = email
         self.is_active = is_active
-    
-    def __repr__(self):
-        return f"<User(username='{self.username}', email='{self.email}')>"
 
 class Session:
-    def __init__(self, user_id: str, ip_address: str, user_agent: str = None, is_active: bool = True):
+    def __init__(self, sid: str, user_id: str, ip_address: str, user_agent: str = None, is_active: bool = True):
+        self.sid = sid
         self.user_id = user_id
         self.ip_address = ip_address
         self.user_agent = user_agent
         self.is_active = is_active
-    
-    def __repr__(self):
-        return f"<Session(user_id='{self.user_id}', ip='{self.ip_address}')>"
 
 class TemporaryLink:
     def __init__(self, user_id: str, token: str, expires_at: datetime):
         self.user_id = user_id
         self.token = token
         self.expires_at = expires_at
-    
-    def __repr__(self):
-        return f"<TemporaryLink(user_id='{self.user_id}', token='{self.token[:5]}...')>"
 
 class Post:
     def __init__(self, user_id: str, text: str):
         self.user_id = user_id
         self.text = text
-    
-    def __repr__(self):
-        return f"<Post(user_id='{self.user_id}', text='{self.text[:20]}...')>"
 
 class PostMedia:
     def __init__(self, post_id: str, file_type: str, file_path: str):
         self.post_id = post_id
         self.file_type = file_type
         self.file_path = file_path
-    
-    def __repr__(self):
-        return f"<PostMedia(post_id='{self.post_id}', type='{self.file_type}')>"
+
+class PostHashtag:
+    def __init__(self, post_id: str, hashtag: str):
+        self.post_id = post_id
+        self.hashtag = hashtag
 
 class UserToken:
     def __init__(self, user_id: str, service: str, token_type: str, token_value: str):
@@ -122,9 +120,6 @@ class UserToken:
         self.service = service
         self.token_type = token_type
         self.token_value = token_value
-    
-    def __repr__(self):
-        return f"<UserToken(user_id='{self.user_id}', service='{self.service}')>"
 
 mapper_registry.map_imperatively(User, users, properties={
     'sessions': relationship(Session, backref='user'),
@@ -135,9 +130,11 @@ mapper_registry.map_imperatively(User, users, properties={
 mapper_registry.map_imperatively(Session, sessions)
 mapper_registry.map_imperatively(TemporaryLink, temp_links)
 mapper_registry.map_imperatively(Post, posts, properties={
-    'media': relationship(PostMedia, backref='post')
+    'media': relationship(PostMedia, backref='post'),
+    'hashtags': relationship(PostHashtag, backref='post')
 })
 mapper_registry.map_imperatively(PostMedia, post_media)
+mapper_registry.map_imperatively(PostHashtag, post_hashtags)
 mapper_registry.map_imperatively(UserToken, user_tokens)
 
 async_engine = create_async_engine(DATABASE_URL, echo=True)
@@ -148,18 +145,18 @@ class DatabaseManager:
         """Проверка подключения к БД"""
         async with async_engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
-        print("✅ Подключение к PostgreSQL успешно")
+        print("✅ Connection to PostgreSQL is successful")
 
     async def create_tables(self):
         """Создание всех таблиц"""
         async with async_engine.begin() as conn:
             await conn.run_sync(metadata.create_all)
-        print("✅ Таблицы успешно созданы")
+        print("✅ Tables have been created successfully")
 
     async def drop_tables(self):
         """Удаление всех таблиц"""
         async with async_engine.begin() as conn:
             await conn.run_sync(metadata.drop_all)
-        print("✅ Таблицы успешно удалены")
+        print("✅ Tables have been deleted successfully")
 
 db_manager = DatabaseManager()

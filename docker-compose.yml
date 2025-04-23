@@ -30,7 +30,7 @@ services:
     image: quay.io/keycloak/keycloak:20.0.1
     restart: always
     hostname: keycloak
-    command: start-dev
+    command: ["start-dev", "--import-realm"]
     ports:
       - "8099:8080"
     env_file:
@@ -40,6 +40,7 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
     volumes:
       - data:/opt/keycloak/data/
+      - ./keycloak_data/import:/opt/keycloak/data/import
   db:
     image: postgres:15-alpine
     env_file:
