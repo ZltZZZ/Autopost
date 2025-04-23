@@ -1,36 +1,15 @@
-name: Bandit Security Scan
+name: Bandit Security Scan 
 
 on:
   pull_request:
-    branches: [dev]  # Триггер только для PR в ветку dev
+    branches: [dev]
 
 jobs:
   bandit-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4  # Загружаем код
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"  # Укажите нужную версию Python
-
-      - name: Install Bandit
-        run: pip install bandit
-
-      - name: Run Bandit Scan
+      - uses: actions/checkout@v4
+      - name: Run Bandit
         run: |
-          bandit -r . -f json -o bandit_results.json || echo "Bandit found issues"
-        
-      - name: Upload Bandit results as artifact (optional)
-        if: always()  # Загружает отчёт даже при ошибке
-        uses: actions/upload-artifact@v4
-        with:
-          name: bandit-report
-          path: bandit_results.json
-
-      - name: Fail if Bandit found critical issues
-        if: failure()  # Блокирует PR, если Bandit вернул ошибку
-        run: |
-          echo "❌ Bandit found security issues. Check the logs or artifact."
-          exit 1
+          pip install bandit
+          bandit -r . --severity-level high --confidence-level high
