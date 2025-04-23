@@ -340,8 +340,8 @@
             <div class="profile-header">
                 <div class="profile-actions">
                     <button id="changePasswordBtn" class="btn btn-secondary">Новый пароль</button>
-                    <button id="editPostBtn" class="btn btn-secondary">Редактировать new пост</button>
-                    <a class="btn btn-danger" href="/auth/logout" role="button">Выход</a>
+                    <button id="editPostBtn" class="btn btn-secondary">Редактировать пост</button>
+                    <a class="btn btn-danger" href="/api/auth/logout" role="button">Выход</a>
 
                     <!-- Контейнер активных сессий -->
                     <div class="sessions-container">
@@ -450,6 +450,9 @@
                 const linkExpirationInfo = document.getElementById("linkExpirationInfo");
                 const revokeLinkBtn = document.getElementById("revokeLinkBtn");
 
+                let profileId = null;
+                let linkId = null;
+
                 // Показываем/скрываем кнопку отзыва
                 function updateRevokeButtonVisibility() {
                     revokeLinkBtn.style.display = temporaryLinkInput.value ? "block" : "none";
@@ -458,19 +461,18 @@
                 // Обработчик клика на кнопку отзыва
                 revokeLinkBtn.addEventListener("click", function () {
                     if (confirm("Вы уверены, что хотите отозвать временную ссылку?")) {
-                        fetch("/api/revoke_temporary_link", {
-                            method: "POST",
+                        fetch(`/api/profile/${profileId}/temp-links/${linkId}`, {
+                            method: "DELETE",
                             headers: {
-                                "Content-Type": "application/x-www-form-urlencoded",
                                 "X-CSRFToken": getCookie("csrftoken"),
                             },
                         })
-                            .then((response) => response.json())
-                            .then((data) => {
-                                if (data.success) {
+                            .then((response) => {
+                                if (response.ok) {
                                     temporaryLinkInput.value = "";
                                     linkExpirationInfo.textContent = "";
                                     revokeLinkBtn.style.display = "none";
+                                    linkId = null;
                                     alert("Ссылка успешно отозвана");
                                 } else {
                                     alert("Ошибка при отзыве ссылки");
@@ -494,7 +496,7 @@
                 generateLinkBtn.addEventListener("click", function () {
                     const duration = parseInt(durationSelect.value);
 
-                    fetch("/api/generate_temporary_link", {
+                    fetch(`/api/profile/${profileId}/temp-links`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/x-www-form-urlencoded",
@@ -508,6 +510,7 @@
                                 temporaryLinkInput.value = data.link;
                                 const expiresAt = new Date(data.expires_at);
                                 linkExpirationInfo.textContent = `Ссылка действительна до: ${expiresAt.toLocaleString()}`;
+                                linkId = data.linkId;
                                 revokeLinkBtn.style.display = "block"; // Показываем кнопку отзыва
                             } else {
                                 alert("Ошибка при генерации ссылки");
@@ -521,39 +524,84 @@
 
                 // Загрузка данных профиля
                 function loadProfileData() {
-                    fetch("/api/profile/data", {
+                    // 1. Получаем ID профиля
+                    fetch("/api/profile", {
                         headers: {
                             "X-CSRFToken": getCookie("csrftoken"),
                         },
                     })
                         .then((response) => response.json())
                         .then((data) => {
-                            if (data.tokens) {
-                                document.getElementById("telegramBotToken").value = data.tokens.telegramBotToken || "";
-                                document.getElementById("telegramChatId").value = data.tokens.telegramChatId || "";
-                                document.getElementById("vkGroupToken").value = data.tokens.vkGroupToken || "";
-                                document.getElementById("vkUserToken").value = data.tokens.vkUserToken || "";
-                                document.getElementById("okGroupToken").value = data.tokens.okGroupToken || "";
+                            if (!data.user_id) {
+                                throw new Error("User ID not received");
+                            }
+                            profileId = data.user_id;
+
+                            // 2. Получаем сессии
+                            return fetch(`/api/profile/${profileId}/sessions`, {
+                                headers: {
+                                    "X-CSRFToken": getCookie("csrftoken"),
+                                },
+                            })
+                                .then((response) => response.json())
+                                .then((sessionsData) => {
+                                    // 3. Получаем временную ссылку
+                                    return fetch(`/api/profile/${profileId}/temp-links`, {
+                                        headers: {
+                                            "X-CSRFToken": getCookie("csrftoken"),
+                                        },
+                                    })
+                                        .then((response) => response.json())
+                                        .then((tempLinksData) => {
+                                            // 4. Получаем токены
+                                            return fetch(`/api/profile/${profileId}/tokens`, {
+                                                headers: {
+                                                    "X-CSRFToken": getCookie("csrftoken"),
+                                                },
+                                            })
+                                                .then((response) => response.json())
+                                                .then((tokensData) => {
+                                                    // Обрабатываем все полученные данные
+                                                    return {
+                                                        userId: profileId,
+                                                        sessions: sessionsData,
+                                                        tempLinks: tempLinksData,
+                                                        tokens: tokensData,
+                                                    };
+                                                });
+                                        });
+                                });
+                        })
+                        .then((profileData) => {
+                            // Обрабатываем токены
+                            if (profileData.tokens) {
+                                document.getElementById("telegramBotToken").value = profileData.tokens.telegramBotToken || "";
+                                document.getElementById("telegramChatId").value = profileData.tokens.telegramChatId || "";
+                                document.getElementById("vkGroupToken").value = profileData.tokens.vkGroupToken || "";
+                                document.getElementById("vkUserToken").value = profileData.tokens.vkUserToken || "";
+                                document.getElementById("okGroupToken").value = profileData.tokens.okGroupToken || "";
 
                                 originalTokens = {
-                                    telegramBotToken: data.tokens.telegramBotToken || "",
-                                    telegramChatId: data.tokens.telegramChatId || "",
-                                    vkGroupToken: data.tokens.vkGroupToken || "",
-                                    vkUserToken: data.tokens.vkUserToken || "",
-                                    okGroupToken: data.tokens.okGroupToken || "",
+                                    telegramBotToken: profileData.tokens.telegramBotToken || "",
+                                    telegramChatId: profileData.tokens.telegramChatId || "",
+                                    vkGroupToken: profileData.tokens.vkGroupToken || "",
+                                    vkUserToken: profileData.tokens.vkUserToken || "",
+                                    okGroupToken: profileData.tokens.okGroupToken || "",
                                 };
                             }
 
-                            if (data.active_sessions) {
-                                renderSessions(data.active_sessions);
+                            // Обрабатываем сессии
+                            if (profileData.sessions?.sessions) {
+                                renderSessions(profileData.sessions.sessions);
                             }
 
-                            // Загрузка временной ссылки (если есть)
-                            if (data.temporary_link?.link) {
-                                temporaryLinkInput.value = data.temporary_link.link;
-                                const expiresAt = new Date(data.temporary_link.expires_at);
+                            // Обрабатываем временную ссылку
+                            if (profileData.tempLinks?.link) {
+                                temporaryLinkInput.value = profileData.tempLinks.link;
+                                const expiresAt = new Date(profileData.tempLinks.expires_at);
                                 linkExpirationInfo.textContent = `Ссылка действительна до: ${expiresAt.toLocaleString()}`;
-                                revokeLinkBtn.style.display = "block"; // Показываем кнопку отзыва
+                                linkId = profileData.tempLinks.linkId;
+                                revokeLinkBtn.style.display = "block";
                             }
                         })
                         .catch((error) => {
@@ -571,8 +619,8 @@
                         sessionElement.className = "session-item";
 
                         // Форматируем даты
-                        const startedDate = new Date(session.started);
-                        const lastAccessDate = new Date(session.last_access);
+                        const startedDate = new Date(session.started_at);
+                        const lastAccessDate = new Date(session.last_accessed);
 
                         sessionElement.innerHTML = `
                         <div class="session-details">
@@ -590,10 +638,10 @@
                             </div>
                             <div class="session-detail">
                                 <span class="session-detail-label">Device:</span>
-                                <span>${session.user_agent}</span>
+                                <span>-</span>
                             </div>
                         </div>
-                        <button class="terminate-session-btn" data-session-id="${session.id}">
+                        <button class="terminate-session-btn" data-session-id="${session.session_id}">
                             Закрыть сессию
                         </button>
                     `;
@@ -613,13 +661,11 @@
                 // Закрытие сессии
                 function terminateSession(sessionId) {
                     if (confirm("Вы уверены, что хотите закрыть эту сессию?")) {
-                        fetch("/api/terminate_session", {
-                            method: "POST",
+                        fetch(`/api/profile/${profileId}/sessions/${sessionId}`, {
+                            method: "DELETE",
                             headers: {
-                                "Content-Type": "application/x-www-form-urlencoded",
                                 "X-CSRFToken": getCookie("csrftoken"),
                             },
-                            body: new URLSearchParams({ session_id: sessionId }),
                         })
                             .then((response) => response.json())
                             .then((data) => {
@@ -677,17 +723,16 @@
                     formData.append("vkUserToken", tokens.vkUserToken);
                     formData.append("okGroupToken", tokens.okGroupToken);
 
-                    fetch("/api/update_tokens", {
-                        method: "POST",
+                    fetch(`/api/profile/${profileId}/tokens`, {
+                        method: "PUT",
                         headers: {
                             "Content-Type": "application/x-www-form-urlencoded",
                             "X-CSRFToken": getCookie("csrftoken"),
                         },
                         body: formData,
                     })
-                        .then((response) => response.json())
-                        .then((data) => {
-                            if (data.success) {
+                        .then((response) => {
+                            if (response.ok) {
                                 alert("Токены успешно обновлены!");
                                 originalTokens = tokens;
                                 saveTokensBtn.style.display = "none";
@@ -748,16 +793,14 @@
                     const formData = new URLSearchParams();
                     formData.append("new_password", newPassword);
 
-                    return fetch("/api/change_password", {
-                        method: "POST",
+                    return fetch(`/api/profile/${profileId}/change_password`, {
+                        method: "PUT",
                         headers: {
                             "Content-Type": "application/x-www-form-urlencoded",
                             "X-CSRFToken": getCookie("csrftoken"),
                         },
                         body: formData,
-                    })
-                        .then((response) => response.json())
-                        .then((data) => data.success);
+                    }).then((response) => response.json());
                 }
 
                 // Редактирование поста
@@ -818,4 +861,3 @@
     <script src="static/bootstrap-5.3.2-dist/js/bootstrap.bundle.min.js"></script>
     <script src="static/app.js"></script>
 </html>
-
