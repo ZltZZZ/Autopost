@@ -1,0 +1,33 @@
+name: Bandit Security Scan
+
+on:
+  push:
+    branches: [ masha, zlata, katya ]
+
+jobs:
+  bandit-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      
+      - name: Install Bandit
+        run: pip install bandit
+      
+      - name: Run Bandit
+        run: bandit -r . -f json -o bandit_results.json || echo "Bandit found issues"
+      
+      - name: Check for Bandit issues
+        if: always()  # Всегда проверяем, даже если Bandit завершился с ошибкой
+        run: |
+          if [ -s bandit_results.json ]; then
+            echo "Bandit found security issues!"
+            cat bandit_results.json
+            exit 1  # Падаем, если есть ошибки
+          else
+            echo "Bandit scan passed!"
+          fi
