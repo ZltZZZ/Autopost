@@ -1,39 +1,36 @@
 name: Bandit Security Scan
 
 on:
-  repository_dispatch:
-    types: [create-pull-request]
-    branches: [ dev ]
   pull_request:
-    branches: [ dev ]
-    types: [opened, synchronize, reopened]
-  check_run:
-    types: [ created, rerequested, completed ]
+    branches: [dev]  # Триггер только для PR в ветку dev
 
 jobs:
   bandit-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4  # Загружаем код
       
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
-      
+          python-version: "3.10"  # Укажите нужную версию Python
+
       - name: Install Bandit
         run: pip install bandit
-      
-      - name: Run Bandit
-        run: bandit -r . -f json -o bandit_results.json || echo "Bandit found issues"
-      
-      - name: Check for Bandit issues
-        if: always()  # Всегда проверяем, даже если Bandit завершился с ошибкой
+
+      - name: Run Bandit Scan
         run: |
-          if [ -s bandit_results.json ]; then
-            echo "Bandit found security issues!"
-            cat bandit_results.json
-            exit 1  # Падаем, если есть ошибки
-          else
-            echo "Bandit scan passed!"
-          fi
+          bandit -r . -f json -o bandit_results.json || echo "Bandit found issues"
+        
+      - name: Upload Bandit results as artifact (optional)
+        if: always()  # Загружает отчёт даже при ошибке
+        uses: actions/upload-artifact@v3
+        with:
+          name: bandit-report
+          path: bandit_results.json
+
+      - name: Fail if Bandit found critical issues
+        if: failure()  # Блокирует PR, если Bandit вернул ошибку
+        run: |
+          echo "❌ Bandit found security issues. Check the logs or artifact."
+          exit 1
