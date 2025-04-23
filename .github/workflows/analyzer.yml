@@ -1,8 +1,11 @@
 name: Bandit Security Scan
 
 on:
+  repository_dispatch:
+    types: [create-pull-request]
+    branches: [ dev ]
   pull_request:
-    branches: [ main, dev, zlata ]
+    branches: [ dev ]
     types: [opened, synchronize, reopened]
 
 jobs:
