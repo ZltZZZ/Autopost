@@ -7,6 +7,7 @@ ENV PYTHONUNBUFFERED 1
 
 COPY requirements.txt /app
 RUN pip install -r requirements.txt
+RUN pip install prometheus-client
 
 COPY . /app
 

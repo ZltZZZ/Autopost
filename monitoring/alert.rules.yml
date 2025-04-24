@@ -1,0 +1,38 @@
+groups:
+- name: security-alerts
+  rules:
+  - alert: ComponentDown
+    expr: up{job=~"backend|frontend|keycloak|postgres"} == 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Компонент {{ $labels.job }} не работает!"
+      description: "Сервис {{ $labels.instance }} недоступен более 2 минут."
+
+  - alert: HighCpuUsage
+    expr: 100 - (avg by(instance)(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+    for: 10s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Высокая загрузка CPU ({{ $value }}%)"
+      description: "Сервер {{ $labels.instance }} перегружен."
+
+  - alert: HighMemoryUsage
+    expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 85
+    for: 10s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Высокая загрузка RAM ({{ $value }}%)"
+      description: "На сервере {{ $labels.instance }} мало свободной памяти."
+
+  - alert: HighDiskUsage
+    expr: 100 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} * 100) > 85
+    for: 10s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Диск заполнен на {{ $value }}%"
+      description: "На сервере {{ $labels.instance }} заканчивается место."

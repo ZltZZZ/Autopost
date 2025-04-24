@@ -19,15 +19,18 @@ services:
     build:
       context: frontend
       dockerfile: Dockerfile
+    environment:
+      - WATCHPACK_POLLING=true
     depends_on:
       - backend
     ports:
       - "8080:80"
 
   keycloak:
-    image: quay.io/keycloak/keycloak:20.0.1
+    image: quay.io/keycloak/keycloak:22.0.1
     restart: always
-    command: start-dev
+    hostname: keycloak
+    command: start-dev --log=file,console
     ports:
       - "8099:8080"
     env_file:
@@ -35,8 +38,15 @@ services:
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_LOG_FILE: "/opt/keycloak/data/log/keycloak.log"
     volumes:
       - data:/opt/keycloak/data/
+      - ./keycloak/logs:/opt/keycloak/data/log  # Монтируем директорию с логами
+    logging:
+      driver: "local"
+      options:
+        max-size: "10m"
+
   db:
     image: postgres:15-alpine
     env_file:
@@ -55,6 +65,103 @@ services:
       timeout: 5s
       retries: 5
 
+  # Мониторинг
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alert.rules.yml:/etc/prometheus/alert.rules.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    depends_on:
+      - cadvisor
+      - node-exporter
+      - blackbox-exporter
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml
+    command:
+      - '--config.file=/etc/blackbox_exporter/config.yml'
+      
+  alertmanager:
+    image: prom/alertmanager:latest
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    depends_on:
+      - prometheus
+      
+  fail2ban:
+    image: crazymax/fail2ban:latest
+    container_name: fail2ban
+    restart: unless-stopped
+    network_mode: "host"  # Требуется для доступа к iptables/nftables
+    volumes:
+      - ./fail2ban:/data  # Конфиги и базы данных
+      - ./keycloak/logs:/var/log/keycloak:ro
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - TZ=Europe/Moscow
+    depends_on:
+      - keycloak
+
 volumes:
   data:
   postgres_data:
+  prometheus_data:
+  grafana_data:
+  
+networks:
+  default:
+    name: project-autopost-network

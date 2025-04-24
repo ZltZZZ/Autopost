@@ -1,0 +1,10 @@
+[keycloak]
+enabled = true
+port = http,https
+filter = keycloak
+logpath = /var/log/keycloak/keycloak.log
+maxretry = 3
+findtime = 600  # 10 минут в секундах
+bantime = 3600  # 1 час в секундах
+action = %(action_)s
+         telegram
