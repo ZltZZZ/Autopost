@@ -8,5 +8,6 @@ COPY config/nginx.conf /etc/nginx/conf.d/nginx.conf
 
 COPY ./app /app/web
 
-EXPOSE 8080
+EXPOSE 80
+EXPOSE 443
 
