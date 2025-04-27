@@ -288,6 +288,21 @@
                 margin-top: 5px;
                 font-size: 14px;
                 color: #555;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .upload-indicator {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.7);
+                color: white;
+                padding: 5px 10px;
+                border-radius: 5px;
+                font-size: 12px;
             }
         </style>
     </head>
@@ -338,26 +353,263 @@
                 let hashtags = [];
                 let mediaFiles = [];
 
+                // Получение id профиля
+                let id_profile = null;
+                let id_post = null;
+
+                let saveTimeout = null;
+                let hashtagSaveTimeout = null;
+
+                function loadProfile() {
+                    // 1. Получаем id профиля
+                    fetch("/api/profile")
+                        .then((response) => response.json())
+                        .then((data) => {
+                            if (data.message === "User exists") {
+                                id_profile = data.user_id;
+
+                                // 2. Получаем id поста
+                                return fetch(`/api/profile/${id_profile}/posts`);
+                            }
+                            throw new Error("User not found");
+                        })
+                        .then((response) => response.json())
+                        .then((data) => {
+                            if (data.message === "Post not exists") {
+                                // 3. Создаем новый пост, если нет существующего
+                                return fetch(`/api/profile/${id_profile}/posts`, {
+                                    method: "POST",
+                                    headers: {
+                                        "X-CSRFToken": getCookie("csrftoken"),
+                                    },
+                                });
+                            }
+                            id_post = data.post_id;
+                            return Promise.resolve();
+                        })
+                        .then((response) => {
+                            if (response && response.ok) {
+                                return response.json();
+                            }
+                            return Promise.resolve();
+                        })
+                        .then((data) => {
+                            if (data && data.message === "New post") {
+                                id_post = data.post_id;
+                            }
+
+                            if (id_post) {
+                                // 4. Получаем текст поста
+                                return fetch(`/api/profile/${id_profile}/posts/${id_post}/text`);
+                            }
+                            return Promise.resolve();
+                        })
+                        .then((response) => {
+                            if (response && response.ok) {
+                                return response.json();
+                            }
+                            return Promise.resolve();
+                        })
+                        .then((data) => {
+                            if (data && data.text) {
+                                postInput.value = data.text;
+                            }
+
+                            // 5. Получаем хештеги поста
+                            return fetch(`/api/profile/${id_profile}/posts/${id_post}/hashtags`);
+                        })
+                        .then((response) => {
+                            if (response && response.ok) {
+                                return response.json();
+                            }
+                            return Promise.resolve();
+                        })
+                        .then((data) => {
+                            if (data && data.hashtags) {
+                                hashtags = data.hashtags;
+                                renderHashtags();
+                            }
+
+                            // 6. Получаем медиа поста
+                            return fetch(`/api/profile/${id_profile}/posts/${id_post}/media`);
+                        })
+                        .then((response) => {
+                            if (response && response.ok) {
+                                return response.json();
+                            }
+                            return Promise.resolve();
+                        })
+                        .then((data) => {
+                            if (data && data.ids) {
+                                // 7. Для каждого медиа получаем его содержимое
+                                const mediaPromises = data.ids.map((media_id) => {
+                                    return fetch(`/api/profile/${id_profile}/posts/${id_post}/media/${media_id}`)
+                                        .then((response) => response.json())
+                                        .then((mediaData) => {
+                                            if (mediaData && mediaData.content) {
+                                                // Конвертируем base64 в Blob
+                                                const byteString = atob(mediaData.content);
+                                                const mimeType = mediaData.type === "image" ? "image/jpeg" : "video/mp4";
+                                                const ab = new ArrayBuffer(byteString.length);
+                                                const ia = new Uint8Array(ab);
+
+                                                for (let i = 0; i < byteString.length; i++) {
+                                                    ia[i] = byteString.charCodeAt(i);
+                                                }
+
+                                                const blob = new Blob([ab], { type: mimeType });
+                                                const file = new File([blob], `media_${media_id}`, { type: mimeType });
+                                                file.serverId = media_id; // Добавляем ID сервера
+                                                mediaFiles.push(file);
+                                            }
+                                        });
+                                });
+
+                                return Promise.all(mediaPromises);
+                            }
+                            return Promise.resolve();
+                        })
+                        .then(() => {
+                            // Отображаем все полученные медиа
+                            renderMedia();
+                        })
+                        .catch((error) => {
+                            console.error("Error loading post data:", error);
+                        });
+                }
+
+                loadProfile();
+
+                function scheduleHashtagsSave() {
+                    clearTimeout(hashtagSaveTimeout);
+                    hashtagSaveTimeout = setTimeout(saveHashtags, 2000);
+                }
+
+                async function saveHashtags() {
+                    if (!id_profile || !id_post) return;
+
+                    // Собираем текущие хештеги
+                    const currentHashtags = [];
+                    document.querySelectorAll(".hashtag-input").forEach((input) => {
+                        const value = input.value.trim();
+                        if (value) {
+                            currentHashtags.push(value.startsWith("#") ? value : `#${value}`);
+                        }
+                    });
+
+                    try {
+                        const response = await fetch(`/api/profile/${id_profile}/posts/${id_post}/hashtags`, {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "X-CSRFToken": getCookie("csrftoken"),
+                            },
+                            body: JSON.stringify({ hashtags: currentHashtags }),
+                        });
+
+                        if (!response.ok) {
+                            throw new Error("Ошибка при сохранении хештегов");
+                        }
+
+                        const data = await response.json();
+                        console.log("Хештеги сохранены:", data);
+                    } catch (error) {
+                        console.error("Ошибка:", error);
+                    }
+                }
+
+                postInput.addEventListener("input", function () {
+                    // Очищаем предыдущий таймер
+                    clearTimeout(saveTimeout);
+
+                    // Устанавливаем новый таймер на 0.5 секунды
+                    saveTimeout = setTimeout(() => {
+                        if (id_profile && id_post && postInput.value.trim() !== "") {
+                            savePostText(postInput.value.trim());
+                        }
+                    }, 500);
+                });
+
+                async function savePostText(text) {
+                    try {
+                        const response = await fetch(`/api/profile/${id_profile}/posts/${id_post}/text`, {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "X-CSRFToken": getCookie("csrftoken"),
+                            },
+                            body: JSON.stringify({ text: text }),
+                        });
+
+                        if (!response.ok) {
+                            throw new Error("Ошибка при сохранении текста");
+                        }
+
+                        const data = await response.json();
+                        console.log("Текст поста сохранен:", data);
+                    } catch (error) {
+                        console.error("Ошибка:", error);
+                    }
+                }
+
                 // Добавление media
                 addMediaBtn.addEventListener("click", function () {
                     fileInput.click();
                 });
 
-                fileInput.addEventListener("change", function (e) {
+                fileInput.addEventListener("change", async function (e) {
                     const files = Array.from(e.target.files);
-                    mediaFiles = [...mediaFiles, ...files];
+
+                    for (const file of files) {
+                        if (id_profile && id_post) {
+                            // Для существующего поста - загружаем на сервер
+                            try {
+                                const formData = new FormData();
+                                formData.append("file", file);
+
+                                const response = await fetch(`/api/profile/${id_profile}/posts/${id_post}/media`, {
+                                    method: "POST",
+                                    headers: {
+                                        "X-CSRFToken": getCookie("csrftoken"),
+                                    },
+                                    body: formData,
+                                });
+
+                                if (!response.ok) throw new Error("Upload failed");
+
+                                const data = await response.json();
+                                file.serverId = data.media_id; // Сохраняем ID с сервера
+                                mediaFiles.push(file);
+                            } catch (error) {
+                                console.error("Upload error:", error);
+                                alert("Ошибка при загрузке файла");
+                                continue;
+                            }
+                        } else {
+                            // Для нового поста - добавляем локально
+                            mediaFiles.push(file);
+                        }
+                    }
+
                     renderMedia();
-                    fileInput.value = ""; // Сбрасываем значение, чтобы можно было добавить те же файлы снова
+                    fileInput.value = "";
                 });
 
                 function renderMedia() {
                     mediaContainer.innerHTML = "";
                     mediaFiles.forEach((file, index) => {
+                        const thumbnail = document.createElement("div");
+                        thumbnail.className = "media-thumbnail";
+
+                        // Индикатор загрузки для новых файлов
+                        if (file.uploading) {
+                            thumbnail.innerHTML = `<div class="upload-indicator">Загрузка...</div>`;
+                            mediaContainer.appendChild(thumbnail);
+                            return;
+                        }
+
                         const reader = new FileReader();
                         reader.onload = function (e) {
-                            const thumbnail = document.createElement("div");
-                            thumbnail.className = "media-thumbnail";
-
                             if (file.type.startsWith("image/")) {
                                 const img = document.createElement("img");
                                 img.src = e.target.result;
@@ -383,13 +635,13 @@
                             });
 
                             thumbnail.addEventListener("click", function () {
-                                // Показать превью в полном размере
                                 showMediaPreview(file, e.target.result);
                             });
 
                             thumbnail.appendChild(deleteBtn);
                             mediaContainer.appendChild(thumbnail);
                         };
+
                         reader.readAsDataURL(file);
                     });
                 }
@@ -426,7 +678,37 @@
                     document.body.appendChild(preview);
                 }
 
-                function removePhoto(index) {
+                async function removePhoto(index) {
+                    if (!id_profile || !id_post) {
+                        mediaFiles.splice(index, 1);
+                        renderMedia();
+                        return;
+                    }
+
+                    // Для загруженных на сервер файлов
+                    if (mediaFiles[index].serverId) {
+                        try {
+                            const response = await fetch(`/api/profile/${id_profile}/posts/${id_post}/media/${mediaFiles[index].serverId}`, {
+                                method: "DELETE",
+                                headers: {
+                                    "X-CSRFToken": getCookie("csrftoken"),
+                                },
+                            });
+
+                            if (!response.ok) {
+                                throw new Error("Ошибка при удалении медиафайла");
+                            }
+
+                            const data = await response.json();
+                            console.log("Медиафайл удален:", data);
+                        } catch (error) {
+                            console.error("Ошибка:", error);
+                            alert("Не удалось удалить медиафайл");
+                            return;
+                        }
+                    }
+
+                    // Удаляем файл из локального списка
                     mediaFiles.splice(index, 1);
                     renderMedia();
                 }
@@ -440,7 +722,7 @@
                     }
 
                     // Запрос к API для генерации хештегов
-                    fetch("/api/generate_hashtags", {
+                    fetch(`/api/profile/${id_profile}/posts/${id_post}/hashtags/generate`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/x-www-form-urlencoded",
@@ -464,6 +746,8 @@
                                         createHashtagElement(fullTag);
                                     }
                                 });
+
+                                saveHashtags();
                             }
                         })
                         .catch((error) => {
@@ -507,6 +791,7 @@
                     const removeHashtag = () => {
                         container.remove();
                         hashtags = hashtags.filter((t) => t !== tag);
+                        saveHashtags();
                     };
 
                     // Обработчик ввода текста
@@ -520,7 +805,7 @@
                         if (inputValue.length < 1) return;
 
                         debounceTimer = setTimeout(() => {
-                            fetch("/api/suggest_hashtags", {
+                            fetch(`/api/profile/${id_profile}/posts/${id_post}/suggest_hashtags`, {
                                 method: "POST",
                                 headers: {
                                     "Content-Type": "application/x-www-form-urlencoded",
@@ -547,6 +832,7 @@
                                                 if (index !== -1) {
                                                     hashtags[index] = newTag;
                                                     container.dataset.tag = newTag;
+                                                    saveHashtags();
                                                 }
 
                                                 suggestionsDiv.classList.add("hidden");
@@ -559,6 +845,8 @@
                                 })
                                 .catch(console.error);
                         }, 300);
+
+                        scheduleHashtagsSave();
                     });
 
                     // Обработчик потери фокуса
@@ -569,11 +857,13 @@
                             const newValue = input.value.trim();
                             if (!newValue) {
                                 removeHashtag();
+                                saveHashtags();
                                 return;
                             }
 
                             const formattedValue = newValue.startsWith("#") ? newValue : `#${newValue}`;
                             input.value = formattedValue;
+                            saveHashtags();
 
                             // Обновляем массив, если значение изменилось
                             if (formattedValue !== tag) {
@@ -584,6 +874,8 @@
                                 }
                             }
                         }, 200);
+
+                        saveHashtags();
                     });
 
                     // Обработчик нажатия Enter
@@ -613,6 +905,7 @@
                     if (!hashtags.includes(newTag)) {
                         hashtags.push(newTag);
                         createHashtagElement(newTag, true);
+                        scheduleHashtagsSave();
                     }
                 }
 
@@ -624,6 +917,7 @@
                             createHashtagElement(formattedTag);
                         }
                     });
+                    saveHashtags();
                 }
 
                 addHashtagBtn.addEventListener("click", addNewHashtag);
@@ -641,77 +935,63 @@
                     progressText.textContent = "0%";
 
                     try {
-                        // Собираем FormData
-                        const formData = new FormData();
-                        formData.append("text", postInput.value.trim());
+                        // 1. Публикуем пост
+                        progressText.textContent = "Публикация поста...";
 
-                        // Фильтруем пустые хештеги перед отправкой
-                        hashtags = hashtags.filter((tag) => {
-                            const container = document.querySelector(`.hashtag-input-container[data-tag="${tag}"]`);
-                            if (!container) return false; // Удаляем хештеги без UI элемента
-
-                            const input = container.querySelector(".hashtag-input");
-                            return input && input.value.trim() !== "";
+                        const publishResponse = await fetch(`/api/profile/${id_profile}/posts/${id_post}`, {
+                            method: "POST",
+                            headers: {
+                                "X-CSRFToken": getCookie("csrftoken"),
+                            },
                         });
 
-                        hashtags.forEach((tag) => formData.append("hashtags", tag));
+                        if (!publishResponse.ok) {
+                            throw new Error("Ошибка при публикации поста");
+                        }
 
-                        // Разделяем файлы на изображения и видео
-                        mediaFiles.forEach((file) => {
-                            if (file.type.startsWith("image/")) {
-                                formData.append("images", file);
-                            } else if (file.type.startsWith("video/")) {
-                                formData.append("videos", file);
-                            }
+                        const publishData = await publishResponse.json();
+                        console.log("Пост опубликован:", publishData);
+
+                        // 2. Удаляем пост после публикации
+                        progressText.textContent = "Завершение публикации...";
+
+                        const deleteResponse = await fetch(`/api/profile/${id_profile}/posts/${id_post}`, {
+                            method: "DELETE",
+                            headers: {
+                                "X-CSRFToken": getCookie("csrftoken"),
+                            },
                         });
 
-                        // Отправляем запрос с отслеживанием прогресса
-                        const xhr = new XMLHttpRequest();
+                        if (!deleteResponse.ok) {
+                            throw new Error("Ошибка при удалении поста");
+                        }
 
-                        xhr.upload.onprogress = function (e) {
-                            if (e.lengthComputable) {
-                                const percent = Math.round((e.loaded / e.total) * 100);
-                                progressBar.style.width = percent + "%";
-                                progressText.textContent = percent + "%";
-                            }
-                        };
+                        const deleteData = await deleteResponse.json();
+                        console.log("Пост удален:", deleteData);
 
-                        const promise = new Promise((resolve, reject) => {
-                            xhr.onload = function () {
-                                if (xhr.status >= 200 && xhr.status < 300) {
-                                    resolve(JSON.parse(xhr.response));
-                                } else {
-                                    reject(new Error(xhr.statusText));
-                                }
-                            };
-
-                            xhr.onerror = function () {
-                                reject(new Error("Network Error"));
-                            };
-                        });
-
-                        xhr.open("POST", "/api/create_post", true);
-                        xhr.setRequestHeader("X-CSRFToken", getCookie("csrftoken"));
-                        xhr.send(formData);
-
-                        const data = await promise;
-
-                        if (data.success) {
-                            alert("Пост успешно опубликован!");
-                            // Сброс формы
+                        // 3. Сбрасываем форму
+                        progressText.textContent = "Готово!";
+                        setTimeout(() => {
                             postInput.value = "";
                             mediaFiles = [];
                             mediaContainer.innerHTML = "";
                             hashtags = [];
                             renderHashtags();
-                        } else {
-                            throw new Error(data.error || "Неизвестная ошибка");
-                        }
+                            progressContainer.style.display = "none";
+
+                            // Сбрасываем ID поста
+                            id_post = null;
+
+                            alert("Пост успешно опубликован!");
+
+                            loadProfile();
+                        }, 5000);
                     } catch (error) {
                         console.error("Upload error:", error);
-                        alert("Ошибка при публикации: " + error.message);
-                    } finally {
-                        progressContainer.style.display = "none";
+                        progressText.textContent = `Ошибка: ${error.message}`;
+                        setTimeout(() => {
+                            progressContainer.style.display = "none";
+                        }, 3000);
                     }
                 }
 

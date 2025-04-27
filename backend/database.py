@@ -15,8 +15,34 @@ users = Table(
     metadata,
     Column("id", String(128), primary_key=True, nullable=False),
     Column("username", String(128), unique=True, nullable=False),
-    Column("email", String(128), unique=True, nullable=False),
-    Column("name", String(128), unique=False, nullable=False)
+    Column("email", String(128), unique=True, nullable=False)
+)
+
+posts = Table(
+    "posts",
+    metadata,
+    Column("id", String(50), primary_key=True, default=lambda: str(uuid.uuid4())),
+    Column("user_id", String(100), ForeignKey("users.id")),
+    Column("text", Text),
+    Column("created_at", DateTime, default=datetime.now),
+    Column("post_at", DateTime)
+)
+
+post_media = Table(
+    "post_media",
+    metadata,
+    Column("id", String(50), primary_key=True, default=lambda: str(uuid.uuid4())),
+    Column("post_id", String(50), ForeignKey("posts.id")),
+    Column("file_type", String(20)),  # 'image' или 'video'
+    Column("file_path", String(200))
+)
+
+post_hashtags = Table(
+    "post_hashtags",
+    metadata,
+    Column("id", String(50), primary_key=True, default=lambda: str(uuid.uuid4())),
+    Column("post_id", String(50), ForeignKey("posts.id")),
+    Column("hashtag", String(200))
 )
 
 sessions = Table(
@@ -37,33 +63,8 @@ temp_links = Table(
     Column("user_id", String(100), ForeignKey("users.id")),
     Column("token", String(200), unique=True),
     Column("created_at", DateTime, default=datetime.now),
-    Column("expires_at", DateTime)
-)
-
-posts = Table(
-    "posts",
-    metadata,
-    Column("id", String(50), primary_key=True, default=lambda: str(uuid.uuid4())),
-    Column("user_id", String(100), ForeignKey("users.id")),
-    Column("text", Text),
-    Column("created_at", DateTime, default=datetime.now)
-)
-
-post_media = Table(
-    "post_media",
-    metadata,
-    Column("id", String(50), primary_key=True, default=lambda: str(uuid.uuid4())),
-    Column("post_id", String(50), ForeignKey("posts.id")),
-    Column("file_type", String(20)),  # 'image' или 'video'
-    Column("file_path", String(200))
-)
-
-post_hashtags = Table(
-    "post_hashtags",
-    metadata,
-    Column("id", String(50), primary_key=True, default=lambda: str(uuid.uuid4())),
-    Column("post_id", String(50), ForeignKey("posts.id")),
-    Column("hashtag", String(200))
+    Column("expires_at", DateTime),
+    Column("keycloak_role", String(200))
 )
 
 user_tokens = Table(
@@ -84,24 +85,18 @@ class User:
         self.email = email
         self.is_active = is_active
 
-class Session:
-    def __init__(self, sid: str, user_id: str, ip_address: str, user_agent: str = None, is_active: bool = True):
-        self.sid = sid
-        self.user_id = user_id
-        self.ip_address = ip_address
-        self.user_agent = user_agent
-        self.is_active = is_active
-
 class TemporaryLink:
-    def __init__(self, user_id: str, token: str, expires_at: datetime):
+    def __init__(self, user_id: str, token: str, expires_at: datetime, keycloak_role: str):
         self.user_id = user_id
         self.token = token
         self.expires_at = expires_at
+        self.keycloak_role = keycloak_role
 
 class Post:
-    def __init__(self, user_id: str, text: str):
+    def __init__(self, user_id: str, text: str, post_at: datetime):
         self.user_id = user_id
         self.text = text
+        self.post_at = post_at
 
 class PostMedia:
     def __init__(self, post_id: str, file_type: str, file_path: str):
@@ -115,19 +110,18 @@ class PostHashtag:
         self.hashtag = hashtag
 
 class UserToken:
-    def __init__(self, user_id: str, service: str, token_type: str, token_value: str):
+    def __init__(self, user_id: str, service: str, token_type: str, token_value: str, last_updated: datetime):
         self.user_id = user_id
         self.service = service
         self.token_type = token_type
         self.token_value = token_value
+        self.last_updated = last_updated
 
 mapper_registry.map_imperatively(User, users, properties={
-    'sessions': relationship(Session, backref='user'),
     'temp_links': relationship(TemporaryLink, backref='user'),
     'posts': relationship(Post, backref='user'),
     'tokens': relationship(UserToken, backref='user')
 })
-mapper_registry.map_imperatively(Session, sessions)
 mapper_registry.map_imperatively(TemporaryLink, temp_links)
 mapper_registry.map_imperatively(Post, posts, properties={
     'media': relationship(PostMedia, backref='post'),
