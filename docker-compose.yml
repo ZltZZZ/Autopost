@@ -24,18 +24,15 @@ services:
     depends_on:
       - backend
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./ssl:/etc/ssl
+      - "8080:80"
 
   keycloak:
     image: quay.io/keycloak/keycloak:22.0.1
     restart: always
     hostname: keycloak
-    command: start-dev --log=file,console --https-certificate-file=/etc/ssl/fullchain.pem --https-certificate-key-file=/etc/ssl/privkey.pem
+    command: start-dev --log=file,console
     ports:
-      - "8099:8443"
+      - "8099:8080"
     env_file:
       - .env
     environment:
@@ -45,7 +42,6 @@ services:
     volumes:
       - data:/opt/keycloak/data/
       - ./keycloak/logs:/opt/keycloak/data/log  # Монтируем директорию с логами
-      - ./ssl:/etc/ssl
     logging:
       driver: "local"
       options:
