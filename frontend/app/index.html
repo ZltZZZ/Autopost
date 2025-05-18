@@ -7,23 +7,150 @@
         <link rel="stylesheet" href="static/bootstrap-5.3.2-dist/css/bootstrap.css" />
         <style>
             * {
+                
                 box-sizing: border-box;
-                font-family: Arial, sans-serif;
+                font-family: "Open Sans", Helvetica, Arial, sans-serif;
             }
 
             body {
-                margin: 0;
+                background-image: url(static/keycloak-bg.png);
+                margin-left: auto;
+    		margin-right: auto;
                 padding: 20px;
-                background-color: #f5f5f5;
+                
+                display: flex;
+                gap: 10px;
             }
-
-            .container {
-                max-width: 800px;
-                margin: 0 auto;
+            
+            .empty-posts-message {
+                text-align: center;
+                padding: 40px;
+                color: #666;
+                font-size: 18px;
                 background-color: white;
                 border-radius: 10px;
-                padding: 20px;
                 box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                margin: 20px auto;
+                max-width: 800px;
+                
+            }
+
+            .container.hidden {
+                display: none;
+            }
+
+            .empty-posts-message.hidden {
+                display: none;
+            }
+
+            .posts-sidebar {
+	    width: 100%;
+	    max-width: 400px;
+	    background-color: white;
+	    border-radius: 10px;
+	    padding: 15px;
+	    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+	    overflow-y: auto;
+	    height: calc(100vh - 40px);
+	    position: fixed;
+	    left: 20px;
+	    top: 50%;
+	    transform: translateY(-50%);
+	    z-index: 100;
+	}
+
+	.container {
+	    max-width: 800px;
+	    width: calc(100% - 460px);
+	    background-color: white;
+	    border-radius: 10px;
+	    padding: 20px;
+	    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+	    margin-left: 440px;
+	    position: relative;
+	    top: 50%;
+	    transform: translateY(34%);
+	    margin-bottom: 20px;
+	    height: 100%;
+	    /* Новая синяя рамка сверху */
+	    border-top: 4px solid #4285f4;
+	    /* Дополнительные стили для улучшения внешнего вида */
+	    border-top-left-radius: 10px;
+	    border-top-right-radius: 10px;
+	}
+
+	@media (max-width: 992px) {
+	    .posts-sidebar {
+		position: static;
+		max-width: 100%;
+		height: auto;
+		margin-bottom: 20px;
+		transform: none;
+		top: auto;
+	    }
+	    
+	    .container {
+		width: calc(100% - 40px); /* Добавляем отступы по бокам */
+		margin: 20px auto; /* Центрируем контейнер */
+		padding: 15px; /* Уменьшаем внутренние отступы */
+		transform: none !important; /* Убираем трансформацию */
+		min-height: auto; /* Убираем фиксированную высоту */
+	    }
+	}
+
+	@media (max-width: 768px) {
+	    .posts-sidebar {
+		padding-top: 70px; /* Увеличиваем отступ сверху */
+	    }
+	    
+	    .mobile-menu-btn {
+		top: 15px; /* Поднимаем кнопку меню выше */
+		left: 15px;
+	    }
+	    
+	    .mobile-menu-close {
+		top: 25px; /* Позиционируем кнопку закрытия */
+		right: 25px;
+	    }
+	    
+	    .add-post-btn {
+		margin-top: 40px; /* Добавляем отступ для кнопки "+ Новый пост" */
+	    }
+	}
+
+            .post-btn {
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                background-color: #f9f9f9;
+                cursor: pointer;
+                text-align: center;
+                transition: background-color 0.2s;
+            }
+
+            .post-btn:hover {
+                background-color: #f0f0f0;
+            }
+
+            .post-btn.active {
+                background-color: #e0f2ff;
+                border-color: #4285f4;
+            }
+
+            .add-post-btn {
+                padding: 10px;
+                border: 1px dashed #4285f4;
+                border-radius: 5px;
+                background-color: #f9f9f9;
+                cursor: pointer;
+                text-align: center;
+                color: #4285f4;
+                font-weight: bold;
+                margin-bottom: 15px;
+            }
+
+            .add-post-btn:hover {
+                background-color: #e0f2ff;
             }
 
             .post-input {
@@ -304,11 +431,94 @@
                 border-radius: 5px;
                 font-size: 12px;
             }
+
+            /* Mobile styles */
+            .mobile-menu-btn {
+                display: none;
+                position: fixed;
+                top: 25px;
+                left: 20px;
+                z-index: 1001;
+                background: white;
+                border: none;
+                border-radius: 5px;
+                padding: 8px 12px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                cursor: pointer;
+            }
+
+            .mobile-menu-btn svg {
+                width: 20px;
+                height: 20px;
+            }
+
+            .mobile-menu-close {
+                display: none;
+                position: absolute;
+                top: 15px;
+                right: 15px;
+                background: none;
+                border: none;
+                font-size: 24px;
+                cursor: pointer;
+                color: #555;
+            }
+
+            @media (max-width: 768px) {
+                body {
+                    padding: 60px 20px 20px;
+                    flex-direction: column;
+                }
+
+                .posts-sidebar {
+                    position: fixed;
+                    top: 0;
+                    left: -100%;
+                    width: 80%;
+                    height: 100vh;
+                    z-index: 1000;
+                    transition: left 0.3s ease;
+                    border-radius: 0;
+                    padding-top: 50px;
+                }
+
+                .posts-sidebar.active {
+                    left: 0;
+                }
+
+                .container {
+                    width: 100%;
+                    max-width: 100%;
+                    height: auto;
+                    min-height: calc(100vh - 80px);
+                }
+
+                .mobile-menu-btn {
+                    display: block;
+                }
+            }
         </style>
     </head>
     <body>
-        <div class="container">
-            <h1>Редактор поста</h1>
+        <button class="mobile-menu-btn" id="mobileMenuBtn">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 12H21" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 6H21" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 18H21" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+
+        <div class="posts-sidebar" id="postsSidebar">
+            <div class="add-post-btn" id="newPostBtn">+ Новый пост</div>
+            <div class="posts-list" id="postsList"></div>
+        </div>
+
+        <div class="empty-posts-message hidden" id="emptyPostsMessage">
+            Нажмите "+ Новый пост" для начала работы
+        </div>
+
+        <div class="container hidden" id="postContainer">
+            <h1 style="text-align: center;">Редактирование поста</h1>
 
             <textarea class="post-input" placeholder="Введите текст поста..."></textarea>
 
@@ -349,136 +559,183 @@
                 const addHashtagBtn = document.getElementById("addHashtagBtn");
                 const publishPostBtn = document.getElementById("publishPost");
                 const profileBtn = document.getElementById("profileBtn");
+                const postsList = document.getElementById("postsList");
+                const newPostBtn = document.getElementById("newPostBtn");
+                const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+                const mobileMenuClose = document.getElementById("mobileMenuClose");
 
                 let hashtags = [];
                 let mediaFiles = [];
+                let posts = [];
+                let currentPostId = null;
 
                 // Получение id профиля
                 let id_profile = null;
-                let id_post = null;
 
                 let saveTimeout = null;
                 let hashtagSaveTimeout = null;
+                
+                mobileMenuBtn.addEventListener("click", function() {
+		    const isActive = postsSidebar.classList.toggle("active");
+		    // Можно добавить анимацию или другие эффекты при открытии/закрытии
+		});
 
-                function loadProfile() {
-                    // 1. Получаем id профиля
-                    fetch("/api/profile")
-                        .then((response) => response.json())
-                        .then((data) => {
-                            if (data.message === "User exists") {
-                                id_profile = data.user_id;
+		// Закрытие меню при клике вне его области
+		document.addEventListener("click", function(e) {
+		    if (window.innerWidth <= 768) {
+			const isClickInsideSidebar = postsSidebar.contains(e.target);
+			const isClickOnMenuButton = e.target === mobileMenuBtn || mobileMenuBtn.contains(e.target);
+			
+			if (!isClickInsideSidebar && !isClickOnMenuButton) {
+			    postsSidebar.classList.remove("active");
+			}
+		    }
+		});
 
-                                // 2. Получаем id поста
-                                return fetch(`/api/profile/${id_profile}/posts`);
+                async function loadPostsList() {
+                    if (!id_profile) return;
+                    
+                    try {
+                        const response = await fetch(`/api/profile/${id_profile}/posts`);
+                        const data = await response.json();
+                        
+                        if (data.posts_ids && data.posts_ids.length > 0) {
+                            posts = data.posts_ids.map(id => ({ id }));
+                            renderPostsList();
+                            
+                            // Показываем контейнер редактирования и скрываем сообщение
+                            document.getElementById('postContainer').classList.remove('hidden');
+                            document.getElementById('emptyPostsMessage').classList.add('hidden');
+                            
+                            // Если есть посты, загружаем первый
+                            if (posts.length > 0 && !currentPostId) {
+                                loadPost(posts[0].id);
                             }
-                            throw new Error("User not found");
-                        })
-                        .then((response) => response.json())
-                        .then((data) => {
-                            if (data.message === "Post not exists") {
-                                // 3. Создаем новый пост, если нет существующего
-                                return fetch(`/api/profile/${id_profile}/posts`, {
-                                    method: "POST",
-                                    headers: {
-                                        "X-CSRFToken": getCookie("csrftoken"),
-                                    },
-                                });
-                            }
-                            id_post = data.post_id;
-                            return Promise.resolve();
-                        })
-                        .then((response) => {
-                            if (response && response.ok) {
-                                return response.json();
-                            }
-                            return Promise.resolve();
-                        })
-                        .then((data) => {
-                            if (data && data.message === "New post") {
-                                id_post = data.post_id;
-                            }
-
-                            if (id_post) {
-                                // 4. Получаем текст поста
-                                return fetch(`/api/profile/${id_profile}/posts/${id_post}/text`);
-                            }
-                            return Promise.resolve();
-                        })
-                        .then((response) => {
-                            if (response && response.ok) {
-                                return response.json();
-                            }
-                            return Promise.resolve();
-                        })
-                        .then((data) => {
-                            if (data && data.text) {
-                                postInput.value = data.text;
-                            }
-
-                            // 5. Получаем хештеги поста
-                            return fetch(`/api/profile/${id_profile}/posts/${id_post}/hashtags`);
-                        })
-                        .then((response) => {
-                            if (response && response.ok) {
-                                return response.json();
-                            }
-                            return Promise.resolve();
-                        })
-                        .then((data) => {
-                            if (data && data.hashtags) {
-                                hashtags = data.hashtags;
-                                renderHashtags();
-                            }
-
-                            // 6. Получаем медиа поста
-                            return fetch(`/api/profile/${id_profile}/posts/${id_post}/media`);
-                        })
-                        .then((response) => {
-                            if (response && response.ok) {
-                                return response.json();
-                            }
-                            return Promise.resolve();
-                        })
-                        .then((data) => {
-                            if (data && data.ids) {
-                                // 7. Для каждого медиа получаем его содержимое
-                                const mediaPromises = data.ids.map((media_id) => {
-                                    return fetch(`/api/profile/${id_profile}/posts/${id_post}/media/${media_id}`)
-                                        .then((response) => response.json())
-                                        .then((mediaData) => {
-                                            if (mediaData && mediaData.content) {
-                                                // Конвертируем base64 в Blob
-                                                const byteString = atob(mediaData.content);
-                                                const mimeType = mediaData.type === "image" ? "image/jpeg" : "video/mp4";
-                                                const ab = new ArrayBuffer(byteString.length);
-                                                const ia = new Uint8Array(ab);
-
-                                                for (let i = 0; i < byteString.length; i++) {
-                                                    ia[i] = byteString.charCodeAt(i);
-                                                }
-
-                                                const blob = new Blob([ab], { type: mimeType });
-                                                const file = new File([blob], `media_${media_id}`, { type: mimeType });
-                                                file.serverId = media_id; // Добавляем ID сервера
-                                                mediaFiles.push(file);
-                                            }
-                                        });
-                                });
-
-                                return Promise.all(mediaPromises);
-                            }
-                            return Promise.resolve();
-                        })
-                        .then(() => {
-                            // Отображаем все полученные медиа
-                            renderMedia();
-                        })
-                        .catch((error) => {
-                            console.error("Error loading post data:", error);
-                        });
+                        } else {
+                            posts = [];
+                            renderPostsList();
+                            
+                            // Показываем сообщение и скрываем контейнер редактирования
+                            document.getElementById('emptyPostsMessage').classList.remove('hidden');
+                            document.getElementById('postContainer').classList.add('hidden');
+                        }
+                    } catch (error) {
+                        console.error("Error loading posts list:", error);
+                    }
                 }
 
-                loadProfile();
+                // Отображение списка постов
+                function renderPostsList() {
+                    postsList.innerHTML = "";
+                    
+                    posts.forEach(post => {
+                        const postBtn = document.createElement("div");
+                        postBtn.className = `post-btn ${post.id === currentPostId ? 'active' : ''}`;
+                        postBtn.textContent = `Пост ${post.id.split('-')[0]}`;
+                        postBtn.addEventListener("click", () => loadPost(post.id));
+                        postsList.appendChild(postBtn);
+                    });
+                }
+
+                async function createNewPost() {
+                    try {
+                        const response = await fetch(`/api/profile/${id_profile}/posts`, {
+                            method: "POST",
+                            headers: {
+                                "X-CSRFToken": getCookie("csrftoken"),
+                            },
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.message === "New post") {
+                            // Добавляем новый пост в список
+                            posts.unshift({
+                                id: data.post_id,
+                                text: "",
+                                hashtags: [],
+                                media: []
+                            });
+                            
+                            renderPostsList();
+                            loadPost(data.post_id);
+                            
+                            // Показываем контейнер редактирования и скрываем сообщение
+                            document.getElementById('postContainer').classList.remove('hidden');
+                            document.getElementById('emptyPostsMessage').classList.add('hidden');
+                        }
+                    } catch (error) {
+                        console.error("Error creating new post:", error);
+                    }
+                }
+
+                // Загрузка конкретного поста
+                async function loadPost(postId) {
+                    currentPostId = postId;
+                    renderPostsList();
+                    
+                    // Очищаем текущие данные
+                    postInput.value = "";
+                    mediaFiles = [];
+                    mediaContainer.innerHTML = "";
+                    hashtags = [];
+                    renderHashtags();
+                    
+                    // Загружаем данные поста
+                    try {
+                        // 1. Получаем текст поста
+                        const textResponse = await fetch(`/api/profile/${id_profile}/posts/${postId}/text`);
+                        const textData = await textResponse.json();
+                        if (textData.text) {
+                            postInput.value = textData.text;
+                        }
+
+                        // 2. Получаем хештеги поста
+                        const hashtagsResponse = await fetch(`/api/profile/${id_profile}/posts/${postId}/hashtags`);
+                        const hashtagsData = await hashtagsResponse.json();
+                        if (hashtagsData.hashtags) {
+                            hashtags = hashtagsData.hashtags;
+                            renderHashtags();
+                        }
+
+                        // 3. Получаем медиа поста
+                        const mediaResponse = await fetch(`/api/profile/${id_profile}/posts/${postId}/media`);
+                        const mediaData = await mediaResponse.json();
+                        
+                        if (mediaData.ids) {
+                            // Для каждого медиа получаем его содержимое
+                            const mediaPromises = mediaData.ids.map(async (media_id) => {
+                                const mediaItemResponse = await fetch(`/api/profile/${id_profile}/posts/${postId}/media/${media_id}`);
+                                const mediaItemData = await mediaItemResponse.json();
+                                
+                                if (mediaItemData && mediaItemData.content) {
+                                    // Конвертируем base64 в Blob
+                                    const byteString = atob(mediaItemData.content);
+                                    const mimeType = mediaItemData.type === "image" ? "image/jpeg" : "video/mp4";
+                                    const ab = new ArrayBuffer(byteString.length);
+                                    const ia = new Uint8Array(ab);
+
+                                    for (let i = 0; i < byteString.length; i++) {
+                                        ia[i] = byteString.charCodeAt(i);
+                                    }
+
+                                    const blob = new Blob([ab], { type: mimeType });
+                                    const file = new File([blob], `media_${media_id}`, { type: mimeType });
+                                    file.serverId = media_id; // Добавляем ID сервера
+                                    return file;
+                                }
+                                return null;
+                                
+                            });
+
+                            const files = await Promise.all(mediaPromises);
+                            mediaFiles = files.filter(file => file !== null);
+                            renderMedia();
+                        }
+                    } catch (error) {
+                        console.error("Error loading post data:", error);
+                    }
+                }
 
                 function scheduleHashtagsSave() {
                     clearTimeout(hashtagSaveTimeout);
@@ -486,7 +743,7 @@
                 }
 
                 async function saveHashtags() {
-                    if (!id_profile || !id_post) return;
+                    if (!id_profile || !currentPostId) return;
 
                     // Собираем текущие хештеги
                     const currentHashtags = [];
@@ -498,7 +755,7 @@
                     });
 
                     try {
-                        const response = await fetch(`/api/profile/${id_profile}/posts/${id_post}/hashtags`, {
+                        const response = await fetch(`/api/profile/${id_profile}/posts/${currentPostId}/hashtags`, {
                             method: "PUT",
                             headers: {
                                 "Content-Type": "application/json",
@@ -524,7 +781,7 @@
 
                     // Устанавливаем новый таймер на 0.5 секунды
                     saveTimeout = setTimeout(() => {
-                        if (id_profile && id_post && postInput.value.trim() !== "") {
+                        if (id_profile && currentPostId && postInput.value.trim() !== "") {
                             savePostText(postInput.value.trim());
                         }
                     }, 500);
@@ -532,7 +789,7 @@
 
                 async function savePostText(text) {
                     try {
-                        const response = await fetch(`/api/profile/${id_profile}/posts/${id_post}/text`, {
+                        const response = await fetch(`/api/profile/${id_profile}/posts/${currentPostId}/text`, {
                             method: "PUT",
                             headers: {
                                 "Content-Type": "application/json",
@@ -561,13 +818,13 @@
                     const files = Array.from(e.target.files);
 
                     for (const file of files) {
-                        if (id_profile && id_post) {
+                        if (id_profile && currentPostId) {
                             // Для существующего поста - загружаем на сервер
                             try {
                                 const formData = new FormData();
                                 formData.append("file", file);
 
-                                const response = await fetch(`/api/profile/${id_profile}/posts/${id_post}/media`, {
+                                const response = await fetch(`/api/profile/${id_profile}/posts/${currentPostId}/media`, {
                                     method: "POST",
                                     headers: {
                                         "X-CSRFToken": getCookie("csrftoken"),
@@ -679,7 +936,7 @@
                 }
 
                 async function removePhoto(index) {
-                    if (!id_profile || !id_post) {
+                    if (!id_profile || !currentPostId) {
                         mediaFiles.splice(index, 1);
                         renderMedia();
                         return;
@@ -688,7 +945,7 @@
                     // Для загруженных на сервер файлов
                     if (mediaFiles[index].serverId) {
                         try {
-                            const response = await fetch(`/api/profile/${id_profile}/posts/${id_post}/media/${mediaFiles[index].serverId}`, {
+                            const response = await fetch(`/api/profile/${id_profile}/posts/${currentPostId}/media/${mediaFiles[index].serverId}`, {
                                 method: "DELETE",
                                 headers: {
                                     "X-CSRFToken": getCookie("csrftoken"),
@@ -722,7 +979,7 @@
                     }
 
                     // Запрос к API для генерации хештегов
-                    fetch(`/api/profile/${id_profile}/posts/${id_post}/hashtags/generate`, {
+                    fetch(`/api/profile/${id_profile}/posts/${currentPostId}/hashtags/generate`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/x-www-form-urlencoded",
@@ -805,7 +1062,7 @@
                         if (inputValue.length < 1) return;
 
                         debounceTimer = setTimeout(() => {
-                            fetch("/api/profile/${id_profile}/posts/${id_post}/suggest_hashtags", {
+                            fetch(`/api/profile/${id_profile}/posts/${currentPostId}/suggest_hashtags`, {
                                 method: "POST",
                                 headers: {
                                     "Content-Type": "application/x-www-form-urlencoded",
@@ -923,7 +1180,6 @@
                 addHashtagBtn.addEventListener("click", addNewHashtag);
 
                 // Публикация поста
-
                 async function uploadPost() {
                     const progressContainer = document.getElementById("uploadProgress");
                     const progressBar = document.getElementById("progressBar");
@@ -938,7 +1194,7 @@
                         // 1. Публикуем пост
                         progressText.textContent = "Публикация поста...";
 
-                        const publishResponse = await fetch(`/api/profile/${id_profile}/posts/${id_post}`, {
+                        const publishResponse = await fetch(`/api/profile/${id_profile}/posts/${currentPostId}`, {
                             method: "POST",
                             headers: {
                                 "X-CSRFToken": getCookie("csrftoken"),
@@ -955,7 +1211,7 @@
                         // 2. Удаляем пост после публикации
                         progressText.textContent = "Завершение публикации...";
 
-                        const deleteResponse = await fetch(`/api/profile/${id_profile}/posts/${id_post}`, {
+                        const deleteResponse = await fetch(`/api/profile/${id_profile}/posts/${currentPostId}`, {
                             method: "DELETE",
                             headers: {
                                 "X-CSRFToken": getCookie("csrftoken"),
@@ -979,13 +1235,10 @@
                             renderHashtags();
                             progressContainer.style.display = "none";
 
-                            // Сбрасываем ID поста
-                            id_post = null;
-
+                            // Обновляем список постов
+                            loadPostsList();
                             alert("Пост успешно опубликован!");
-
-                            loadProfile();
-                        }, 5000);
+                        }, 500);
                     } catch (error) {
                         console.error("Upload error:", error);
                         progressText.textContent = `Ошибка: ${error.message}`;
@@ -1006,6 +1259,31 @@
                 profileBtn.addEventListener("click", function () {
                     window.location.href = "/profile";
                 });
+
+                // Создание нового поста
+                newPostBtn.addEventListener("click", createNewPost);
+
+                // Инициализация страницы
+                async function initPage() {
+                    // Инициализируем элементы как скрытые
+                    document.getElementById('postContainer').classList.add('hidden');
+                    document.getElementById('emptyPostsMessage').classList.add('hidden');
+                    
+                    // Получаем профиль пользователя
+                    try {
+                        const profileResponse = await fetch("/api/profile");
+                        const profileData = await profileResponse.json();
+                        
+                        if (profileData.message === "User exists" || profileData.message === "User created") {
+                            id_profile = profileData.user_id;
+                            loadPostsList();
+                        }
+                    } catch (error) {
+                        console.error("Error initializing page:", error);
+                    }
+                }
+
+                initPage();
 
                 // Вспомогательная функция для получения CSRF токена
                 function getCookie(name) {
